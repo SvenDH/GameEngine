@@ -1,6 +1,6 @@
 
 .vs/*
-packages/*
+/packages/*
 
 
-resources/*
+/resources/*
