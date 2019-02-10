@@ -1,6 +1,5 @@
 
-.vs/*
-/packages/*
+.vs/
+packages/
 
-
-/resources/*
+resources/
