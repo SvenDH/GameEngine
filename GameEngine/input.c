@@ -1,46 +1,58 @@
 #pragma once
 #include "input.h"
+#include "data.h"
 
-static InputBuffer input_buffer;
+static RingBuffer* input_buffer;
+static RingBuffer* text_buffer;
+
+int text_enqueue(char c) {
+	enqueue(text_buffer, c, char);
+}
+
+char text_peek() {
+	char out;
+	peek(text_buffer, out, char);
+	return out;
+}
+
+char text_dequeue() {
+	char out;
+	dequeue(text_buffer, out, char);
+	return out;
+}
 
 int input_enqueue(int input, double time) {
-	if ((input_buffer.tail_ + 1) % INPUT_BUFFER_SIZE != input_buffer.head_) {
-		input_buffer.tail_ = (input_buffer.tail_ + 1) % INPUT_BUFFER_SIZE;
-		input_buffer.buffer_[input_buffer.tail_].button = input;
-		input_buffer.buffer_[input_buffer.tail_].time = time;
-		return 0;
-	}
-	return 1;
+	InputAction ai;
+	ai.button = input;
+	ai.time = time;
+	enqueue(input_buffer, ai, InputAction);
 }
 
-InputAction* input_dequeue() {
-	if (input_buffer.head_ != input_buffer.tail_) {
-		InputAction* ia = &input_buffer.buffer_[input_buffer.head_];
-		input_buffer.head_ = (input_buffer.head_ + 1) % INPUT_BUFFER_SIZE;
-		return ia;
-	}
-	return NULL;
+InputAction input_dequeue() {
+	InputAction ai = { 0 };
+	dequeue(input_buffer, ai, InputAction);
+	return ai;
 }
 
-InputAction* input_peek() {
-	if (input_buffer.head_ != input_buffer.tail_)
-		return &input_buffer.buffer_[input_buffer.head_];
-	return NULL;
+InputAction input_peek() {
+	InputAction ai = { 0 };
+	peek(input_buffer, ai, InputAction);
+	return ai;
 }
 
-static int lua_Input_get(lua_State* L) {
-	InputAction* input;
+static int input_get(lua_State* L) {
+	InputAction input;
 	if (lua_gettop(L) > 0) {
 		input = input_peek();
-		if (!input || input->button != luaL_checkinteger(L, -1))
-			input = NULL;
+		if (input.button != luaL_checkinteger(L, -1))
+			input.button = 0;
 	}
 	else {
 		input = input_dequeue();
 	}
-	if (input) {
-		lua_pushnumber(L, input->button);
-		lua_pushnumber(L, input->time);
+	if (input.button) {
+		lua_pushnumber(L, input.button);
+		lua_pushnumber(L, input.time);
 		return 2;
 	}
 	else {
@@ -51,6 +63,9 @@ static int lua_Input_get(lua_State* L) {
 }
 #define E LUA_ENUM_HELPER
 int openlib_Input(lua_State* L) {
+	input_buffer = ringbuffer_init(INPUT_BUFFER_SIZE, malloc(INPUT_BUFFER_SIZE * sizeof(InputAction)));
+	text_buffer = ringbuffer_init(INPUT_BUFFER_SIZE, malloc(INPUT_BUFFER_SIZE * sizeof(char)));
+
 	lua_settop(L, 0);
 	lua_newtable(L);
 	BUTTONS
@@ -58,7 +73,7 @@ int openlib_Input(lua_State* L) {
 	lua_pushliteral(L, "PRESS"); lua_pushnumber(L, PRESS_BUTTON); lua_settable(L, -3);
 	lua_setglobal(L, "INPUT");
 	static const struct luaL_Reg func[] = {
-		{"get", lua_Input_get},
+		{"get", input_get},
 		{NULL, NULL}
 	};
 	luaL_newlib(L, func);

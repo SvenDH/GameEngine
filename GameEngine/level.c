@@ -1,6 +1,5 @@
 #include "level.h"
-#include "resources.h"
-#include "renderer.h"
+#include "graphics.h"
 
 #include <stdlib.h>
 
@@ -15,7 +14,7 @@ void level_init() {
 	for (int i = 0; i < CHUNK_POOL_SIZE; i++)
 		chunks[i].index = i;
 
-	tileset = (Texture*)resources_get("castle");
+	tileset = NULL;//(Texture*)resources_get("castle");
 
 	chunk_init(&chunks[0], 0, 0);
 }

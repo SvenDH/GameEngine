@@ -1,5 +1,5 @@
 #pragma once
-#include <glad.h>
+#include <glad/glad.h>
 #include <lauxlib.h>
 
 #define Texture_mt "Texture"
@@ -19,5 +19,4 @@ void texture_delete(Texture* tex);
 void texture_bind(Texture* tex);
 Texture* texture_getcurrent();
 
-Texture *checktexture(lua_State *L, int i);
-static int Texture_mt_index(lua_State* L);
+int openlib_Texture(lua_State* L);

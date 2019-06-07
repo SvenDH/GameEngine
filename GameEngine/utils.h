@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <glad.h>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #include <uv.h>
 
 /* Math functions */
@@ -135,6 +136,10 @@ inline GLenum glCheckError_(const char *file, int line) {
 #define glCheckError()	   glCheckError_(__FILE__, __LINE__)
 
 /* Async functions */
+inline double get_time() {
+	return glfwGetTime();
+}
+
 inline struct sockaddr_storage* get_address(uv_tcp_t* peer, size_t* addrlen) {
 	*addrlen = sizeof(struct sockaddr_storage);
 	struct sockaddr_storage* addr = malloc(*addrlen);

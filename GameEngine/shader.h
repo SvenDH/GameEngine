@@ -1,5 +1,5 @@
 #pragma once
-#include <glad.h>
+#include <glad/glad.h>
 #include <lauxlib.h>
 
 #define Shader_mt "Shader"
@@ -9,12 +9,8 @@ typedef struct Shader {
 	unsigned int stages;
 } Shader;
 
-void shader_compile(Shader* shader, const GLchar* source);
-void shader_delete(Shader* shader);
-void shader_use(Shader* shader);
-Shader* shader_getcurrent();
+void shader_bind(Shader* shader);
 
-static int shader_compile_error(GLuint obj);
-static int program_compile_error(GLuint obj);
+Shader* shader_getcurrent();
 
 int openlib_Shader(lua_State* L);
