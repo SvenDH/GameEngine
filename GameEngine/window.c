@@ -1,19 +1,18 @@
 #include "window.h"
-#include "input.h"
+#include "event.h"
 #include "async.h"
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#include <stdio.h>
 
 GLFWwindow* window;
 
+static int input_map[] = { 0, GLFW_KEY_UP, GLFW_KEY_DOWN, GLFW_KEY_LEFT, GLFW_KEY_RIGHT, GLFW_KEY_Q, GLFW_KEY_W, GLFW_KEY_E, GLFW_KEY_R, GLFW_KEY_ESCAPE, GLFW_KEY_TAB, NULL };
+
 //Window callbacks
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-void character_callback(GLFWwindow* window, unsigned int codepoint);
-void close_callback(GLFWwindow* window);
+static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+static void character_callback(GLFWwindow* window, unsigned int codepoint);
+static void close_callback(GLFWwindow* window);
 
 //Window.init(title, width, height)
-int window_init(lua_State* L) {
+static int window_init(lua_State* L) {
 	char* title = luaL_checkstring(L, 1);
 	int width = luaL_checkinteger(L, 2);
 	int height = luaL_checkinteger(L, 3);
@@ -48,7 +47,7 @@ int window_init(lua_State* L) {
 }
 
 //Window.resize(width, height)
-int window_resize(lua_State* L) {
+static int window_resize(lua_State* L) {
 	int width = luaL_checkinteger(L, 1);
 	int height = luaL_checkinteger(L, 2);
 	glfwSetWindowSize(window, width, height);
@@ -56,61 +55,69 @@ int window_resize(lua_State* L) {
 }
 
 //Window.title(title)
-int window_title(lua_State* L) {
+static int window_title(lua_State* L) {
 	char* title = luaL_checkstring(L, 1);
 	glfwSetWindowTitle(window, title);
 	return 0;
 }
 
-//Window.swap()
-int window_swap(lua_State* L) {
+void window_swap() {
 	glfwSwapBuffers(window);
-	return 0;
 }
 
-//Window.poll()
-int window_poll(lua_State* L) {
+void window_poll() {
 	glfwPollEvents();
-	return 0;
 }
 
-void character_callback(GLFWwindow* window, unsigned int codepoint) {
-	text_enqueue(codepoint);
+void window_close() {
+	glfwDestroyWindow(window);
 }
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-	static int input_map[] = { 0, GLFW_KEY_UP, GLFW_KEY_DOWN, GLFW_KEY_LEFT, GLFW_KEY_RIGHT, GLFW_KEY_Q, GLFW_KEY_W, GLFW_KEY_E, GLFW_KEY_R, GLFW_KEY_ESCAPE, GLFW_KEY_TAB, NULL };
+static void character_callback(GLFWwindow* window, unsigned int codepoint) {
+	event_push(EVT_TEXT, &(char)codepoint, 1);
+}
+
+static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	if (action == GLFW_PRESS) {
-		for (int i = 1; input_map[i]; i++) {
+		for (char i = 1; input_map[i]; i++) {
 			if (key == input_map[i]) {
 				double time = get_time();
-				input_enqueue(i, time);
-				break;
+				event_push(EVT_INPUT, &i, 1);
+				return;
 			}
 		} //No mapped keys input special text
+		char k = 0;
 		switch (key) {
-		case GLFW_KEY_ENTER: text_enqueue('\n'); return;
-		case GLFW_KEY_BACKSPACE: text_enqueue('\r'); return;
-		case GLFW_KEY_TAB: text_enqueue('\t'); return;
+		case GLFW_KEY_ENTER: k = '\n'; break;
+		case GLFW_KEY_BACKSPACE: k = '\r'; break;
+		case GLFW_KEY_TAB: k = '\t'; break;
 		}
+		if (k) event_push(EVT_TEXT, &k, 1);
 	}
 }
 
-void close_callback(GLFWwindow* window) {
-	async_stop();
+static void close_callback(GLFWwindow* window) {
+	event_push(EVT_QUIT, NULL, 0);
 }
 
-int openlib_Window(lua_State* L) {
-	lua_settop(L, 0);
-	static luaL_Reg lib[] = {
+static luaL_Reg lib[] = {
 		{"init", window_init},
 		{"resize", window_resize},
 		{"title", window_title},
-		{"swap", window_swap},
-		{"poll", window_poll},
 		{NULL, NULL}
-	};
+};
+
+#define E LUA_ENUM_HELPER
+int openlib_Window(lua_State* L) {
 	luaL_newlib(L, lib);
 	lua_setglobal(L, Window_mt);
-	return 1;
+
+	lua_newtable(L);
+	BUTTONS
+		lua_pushliteral(L, "RELEASE"); lua_pushnumber(L, RELEASE_BUTTON); lua_settable(L, -3);
+	lua_pushliteral(L, "PRESS"); lua_pushnumber(L, PRESS_BUTTON); lua_settable(L, -3);
+	lua_setglobal(L, "INPUT");
+
+	return 0;
 }
+#undef E

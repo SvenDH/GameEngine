@@ -6,6 +6,8 @@
 Camera* default_camera;
 Camera* current_camera;
 
+Canvas* current_canvas;
+
 void camera_new(Camera* camera, float x, float y, float width, float height) {
 	glm_vec3((vec4) { width, height, 0., 1. }, camera->size);
 	glm_ortho(0.0f, width, height, 0.0f, -1.0f, 1.0f, camera->projection);
@@ -77,20 +79,78 @@ int graphics_stencil(lua_State* L) {
 //Graphics.end()
 int graphics_present(lua_State* L) {
 	sprite_flush();
+	window_swap();
 	return 0;
 }
 
-static const struct luaL_Reg gfx_lib[] = {
-		{"init", graphics_init},
-		{"resize", graphics_resize},
-		{"clear", graphics_clear},
-		{"stencil", graphics_stencil},
-		{"present", graphics_present},
-		{NULL, NULL}
-};
+void canvas_bind(Canvas* canvas) {
+	if (canvas != current_canvas) {
+		if (canvas) {
+			glBindFramebuffer(GL_FRAMEBUFFER, canvas->FBO);
+		}
+		else {
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		}
+		current_canvas = canvas;
+	}
+}
+
+static int canvas_get_texture(lua_State* L) {
+	Canvas *canvas = luaL_checkudata(L, 1, Canvas_mt);
+	lua_pushlightuserdata(L, canvas->tex);
+	luaL_getmetatable(L, Texture_mt);
+	lua_setmetatable(L, -2);
+	return 1;
+}
+
+//Canvas(w, h)
+static int canvas_new(lua_State* L) {
+	int width = luaL_checkinteger(L, 1);
+	int height = luaL_checkinteger(L, 2);
+	if (width < 0 || height < 0) return luaL_error(L, "Error canvas has invalid dimensions");
+
+	Canvas* canvas = (Canvas*)lua_newuserdata(L, sizeof(Canvas));
+	luaL_setmetatable(L, Shader_mt);
+
+	//Create Frame Buffer Object
+	glGenFramebuffers(1, &canvas->FBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, canvas->FBO);
+	//Create Screen Texture
+	Texture* screentex = malloc(sizeof(Texture));
+	texture_generate(screentex, width, height, 1, 4, NULL);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, screentex->tex_ID, 0);
+	//Create Render Buffer Object
+	glGenRenderbuffers(1, &canvas->RBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, canvas->RBO);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, canvas->RBO);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		printf("Framebuffer is not complete!");
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	return 1;
+}
+
+static int canvas_set(lua_State* L) {
+	Canvas *canvas = luaL_checkudata(L, 1, Canvas_mt);
+	canvas_bind(canvas);
+	return 0;
+}
 
 int openlib_Graphics(lua_State* L) {
-	luaL_newlib(L, gfx_lib);
-	lua_setglobal(L, Graphics_mt);
-	return 1;
+	static luaL_Reg canv_func[] = {
+		{"set", canvas_set},
+		{NULL, NULL}
+	};
+	create_lua_class(L, Canvas_mt, canvas_new, canv_func);
+	static const struct luaL_Reg gfx_lib[] = {
+			{"init", graphics_init},
+			{"resize", graphics_resize},
+			{"clear", graphics_clear},
+			{"stencil", graphics_stencil},
+			{"present", graphics_present},
+			{NULL, NULL}
+	};
+	create_lua_lib(L, Graphics_mt, gfx_lib);
+	return 0;
 }

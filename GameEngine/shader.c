@@ -1,6 +1,8 @@
 #include "shader.h"
+#include "utils.h"
+#include "data.h"
 
-static Shader* current_shader = NULL;
+static Shader* current_shader;
 static Shader* default_shader;
 
 static char* default_shader_source =
@@ -35,6 +37,7 @@ static char* default_shader_source =
 static int shader_compile_error(GLuint obj);
 static int program_compile_error(GLuint obj);
 
+MemoryPool* shader_pool;
 
 int shader_compile(Shader *shader, const GLchar *source) {
 	GLuint sVertex, sFragment;
@@ -116,45 +119,42 @@ static int program_compile_error(GLuint obj) {
 	else return 1;
 }
 
+//Shader(data)
 static int shader_load(lua_State* L) {
 	int data_len;
-	const char* data = luaL_checklstring(L, 1, &data_len);
-	Shader* shd = (Shader*)lua_newuserdata(L, sizeof(Shader));
-	luaL_setmetatable(L, Shader_mt);
-	if (shader_compile(shd, data))
-		return luaL_error(L, "Error compiling shader");
-	else return 1;
+	const char* data = luaL_checklstring(L, 2, &data_len);
+	Shader* shd = pool_alloc(shader_pool);
+	if (shader_compile(shd, data)) return luaL_error(L, "Error compiling shader");
+	else {
+		Shader** ref = lua_newuserdata(L, sizeof(Shader*));
+		luaL_setmetatable(L, Shader_mt);
+		*ref = shd;
+		return 1;
+	}
 }
-
+//Shader:use()
 static int shader_use(lua_State* L) {
-	Shader *shader = (Shader*)luaL_checkudata(L, 1, Shader_mt);
+	Shader *shader = *(Shader**)luaL_checkudata(L, 1, Shader_mt);
 	shader_bind(shader);
+	return 0;
 }
-
+//Shader:delete()
 static int shader_delete(lua_State* L) {
-	Shader *shader = (Shader*)luaL_checkudata(L, 1, Shader_mt);
+	Shader *shader = *(Shader**)luaL_checkudata(L, 1, Shader_mt);
 	glDeleteProgram(shader->shd_ID);
+	pool_free(shader_pool, shader);
+	return 0;
 }
-
-static luaL_Reg shd_lib[] = {
-		{"load", shader_load},
-		{NULL, NULL}
-};
-
-static luaL_Reg shd_func[] = {
-		{"use", shader_use},
-		{"__gc", shader_delete},
-		{NULL, NULL},
-};
 
 int openlib_Shader(lua_State* L) {
-	luaL_newmetatable(L, Shader_mt);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");
-	luaL_setfuncs(L, shd_func, 0);
-	lua_pop(L, 1);
+	shader_pool = pool_init(sizeof(Shader), 16);
 
-	luaL_newlib(L, shd_lib);
-	lua_setglobal(L, Shader_mt);
-	return 1;
+	static luaL_Reg shd_func[] = {
+			{"use", shader_use},
+			{"delete", shader_delete},
+			{NULL, NULL},
+	};
+
+	create_lua_class(L, Shader_mt, shader_load, shd_func);
+	return 0;
 }

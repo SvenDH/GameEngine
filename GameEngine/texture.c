@@ -1,9 +1,15 @@
 #include "texture.h"
 #include "utils.h"
+#include "data.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-Texture* current_texture = NULL;
+Texture* current_texture;
+Texture* default_texture;
+
+static GLubyte default_texture_data[] = { 255, 255, 255, 255 };
+
+MemoryPool* texture_pool;
 
 void texture_generate(Texture* tex, int tex_w, int tex_h, int tex_d, int channels, unsigned char* data) {
 	if (tex_w > GL_MAX_TEXTURE_SIZE || tex_h > GL_MAX_TEXTURE_SIZE) {
@@ -56,19 +62,21 @@ void texture_sheet(Texture* tex, int sheet_w, int sheet_h, unsigned char* data) 
 	glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
 }
 
-void texture_subimage(Texture* sprite, int index, unsigned char* data) {
-	glBindTexture(GL_TEXTURE_2D_ARRAY, sprite->tex_ID);
-	glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, index, sprite->width, sprite->height, 1, sprite->format, GL_UNSIGNED_BYTE, data);
-}
-
-void texture_delete(Texture* sprite) {
-	glDeleteTextures(1, &sprite->tex_ID);
+void texture_subimage(Texture* tex, int index, unsigned char* data) {
+	glBindTexture(GL_TEXTURE_2D_ARRAY, tex->tex_ID);
+	glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, index, tex->width, tex->height, 1, tex->format, GL_UNSIGNED_BYTE, data);
 }
 
 void texture_bind(Texture* tex) {
+	if (!tex) {
+		if (!default_texture) {
+			default_texture = malloc(sizeof(Texture));
+			texture_generate(default_texture, 1, 1, 1, 4, default_texture_data);
+		}
+		tex = default_texture;
+	}
 	if (tex != current_texture) {
-		if (tex) glBindTexture(GL_TEXTURE_2D_ARRAY, tex->tex_ID);
-		else glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+		glBindTexture(GL_TEXTURE_2D_ARRAY, tex->tex_ID);
 		current_texture = tex;
 	}
 }
@@ -77,30 +85,34 @@ Texture* texture_getcurrent() {
 	return current_texture;
 }
 
+//Texture(data)
 static int texture_load(lua_State *L) {
 	int spr_w, spr_h, w, h, c, data_len;
 	unsigned char* image;
-	Texture* tex;
 
-	const char* data = luaL_checklstring(L, 1, &data_len);
-	spr_w = luaL_checkinteger(L, 2);
-	spr_h = luaL_checkinteger(L, 3);
+	const char* data = luaL_checklstring(L, 2, &data_len);
+	spr_w = luaL_checkinteger(L, 3);
+	spr_h = luaL_checkinteger(L, 4);
 	if (spr_w < 0 || spr_h < 0) return luaL_error(L, "Error dimensions incorrect");
 
 	image = stbi_load_from_memory(data, data_len, &w, &h, &c, 4);
 	if (image) {
-		tex = (Texture*)lua_newuserdata(L, sizeof(Texture));
-		luaL_setmetatable(L, Texture_mt);
+		Texture* tex = pool_alloc(texture_pool);
 		texture_generate(tex, spr_w, spr_h, (w / spr_w) * (h / spr_h), 4, NULL);
 		texture_sheet(tex, w, h, image);
 		free(image);
+
+		Texture** ref = (Texture**)lua_newuserdata(L, sizeof(Texture*));
+		luaL_setmetatable(L, Texture_mt);
+		*ref = tex;
 		return 1;
 	}
 	else return luaL_error(L, "Error loading sprite image data");
 }
 
-static int lua_Texture_index(lua_State* L) {
-	Texture *s = luaL_checkudata(L, 1, Texture_mt);
+//Texture["widht"/"height"/"depth"]
+static int texture_index(lua_State* L) {
+	Texture *s = *(Texture**)luaL_checkudata(L, 1, Texture_mt);
 	int t = lua_type(L, 2);
 	if (t == LUA_TSTRING) {
 		const char *key = lua_tostring(L, 2);		
@@ -112,31 +124,30 @@ static int lua_Texture_index(lua_State* L) {
 	return 1;
 }
 
-static int lua_Texture_bind(lua_State* L) {
-	Texture *s = luaL_checkudata(L, 1, Texture_mt);
-	texture_bind(s);
+//Texture:set()
+static int texture_set(lua_State* L) {
+	Texture *tex = *(Texture**)luaL_checkudata(L, 1, Texture_mt);
+	texture_bind(tex);
 	return 0;
 }
 
-static luaL_Reg func[] = {
-		{"__index", lua_Texture_index},
-		{"bind", lua_Texture_bind},
-		{NULL, NULL}
-};
-
-static luaL_Reg lib[] = {
-		{"load", texture_load},
-		{NULL, NULL}
-};
+//Texture:delete()
+static int texture_delete(lua_State* L) {
+	Texture *tex = *(Texture**)luaL_checkudata(L, 1, Texture_mt);
+	glDeleteTextures(1, &tex->tex_ID);
+	pool_free(texture_pool, tex);
+	return 0;
+}
 
 int openlib_Texture(lua_State* L) {
-	luaL_newmetatable(L, Texture_mt);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");
-	luaL_setfuncs(L, func, 0);
-	lua_pop(L, 1);
+	texture_pool = pool_init(sizeof(Texture), 32);
 
-	luaL_newlib(L, lib);
-	lua_setglobal(L, Texture_mt);
-	return 1;
+	static luaL_Reg tex_func[] = {
+		{"__index", texture_index},
+		{"delete", texture_delete},
+		{"set", texture_set},
+		{NULL, NULL}
+	};
+	create_lua_class(L, Texture_mt, texture_load, tex_func);
+	return 0;
 }
