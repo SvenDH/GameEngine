@@ -1,90 +1,121 @@
-#include "platform.h"
 #include "async.h"
-#include "sprite.h"
-#include "texture.h"
-#include "shader.h"
-#include "graphics.h"
-#include "event.h"
+#include "utils.h"
 #include "window.h"
-#include "file.h"
-#include "ecs.h"
-#include "math.h"
+#include "graphics.h"
 
-#include <io.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
+static lua_State* L;
 
-static lua_State *L;
+void app_init(app_t* manager, const char* name) {
+	manager->name = name;
+	manager->is_running = 0;
+	manager->next_game_tick = 0;
 
-static char* boot_source =
-"function split(path, sep) sep=sep or '%s' local t = {} local i = 1 for w in string.gmatch(path, '([^'..sep..']+)') do t[i] = w i = i + 1 end return t end\n"
-"function lines(s) if s:sub(-1) ~= '\\n' then s = s..'\\n' end return s:gmatch('(.-)\\n') end\n"
-"function hex_dump(buf) for i = 1, math.ceil(#buf / 16) * 16 do io.write(i > #buf and '   ' or string.format('%02X ', buf:byte(i))) if i % 8 == 0 then io.write(' ') end if i % 16 == 0 then io.write('\\n') end end io.flush() end\n"
-"function array(...) local arr = {} for v in ... do arr[#arr + 1] = v end return arr end\n"
+	event_register(eventhandler_instance(), manager, EVT_QUIT, app_stop);
+}
 
-"Resources = {}"
-"local script_dir = '../resources/scripts'"
-"local shader_dir = '../resources/shaders'"
-"local sprite_dir = '../resources/sprites'"
+#ifdef DEBUG
+/* Console code assumes a Console lua object with "hist" element */
+void console_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+	lua_getglobal(L, "Console");
+	lua_pushstring(L, "hist");
+	lua_pushvalue(L, -1);
+	lua_gettable(L, -3);
+	lua_pushlstring(L, buf->base, nread);
+	lua_concat(L, 2);
+	lua_settable(L, -3);
+	free(buf->base);
+}
 
-"for path in Dir(script_dir) do"
-"	opts = split(path, '.')"
-"	f = File(script_dir .. '/' .. path)"
-"   Resources[opts[1]] = assert(load(f:read()))()"
-"	f:close()"
-"end\n"
+void console_alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
+	*buf = uv_buf_init((char*)malloc(suggested_size), suggested_size);
+}
 
-"Config = Resources['Config']"
-"Window.init(Config.title, Config.width, Config.height)"
-"Graphics.init(Config.width, Config.height, Config.zoom)"
+void console_on_freopen(uv_stream_t* server, int status) {
+	lua_State* L = server->data;
+	uv_pipe_t* pipe2 = malloc(sizeof(uv_pipe_t));
+	pipe2->data = L;
+	uv_pipe_init(uv_default_loop(), pipe2, 0);
+	uv_accept(server, (uv_stream_t*)pipe2);
+	uv_read_start((uv_stream_t*)pipe2, console_alloc_buffer, console_on_read);
+}
+#endif
 
-"for path in Dir(shader_dir) do"
-"	opts = split(path, '.')"
-"	f = File(shader_dir .. '/' .. path)"
-"   Resources[opts[1]] = Shader(f:read())"
-"	f:close()"
-"end\n"
+void event_poll_cb(uv_idle_t* handle) {
+	app_t* manager = handle->data;
+	EventHandler* handler = eventhandler_instance();
+	window_poll(window_instance());
+	event_pump(handler);
+	if (manager->is_running) {
+		double interpolation = 1.0 / SKIP_TICKS;
+		double dt = get_time() - manager->next_game_tick;
+		int loops = 0;
+		while (get_time() > manager->next_game_tick && loops < MAX_FRAMESKIP) {
+			//print("%d\n", interpolation);
+			event_dispatch(handler, (Event) { .type = EVT_PREUPDATE, .nr = interpolation });
+			event_dispatch(handler, (Event) { .type = EVT_UPDATE, .nr = interpolation });
+			event_dispatch(handler, (Event) { .type = EVT_POSTUPDATE, .nr = interpolation });
 
-"for path in Dir(sprite_dir) do"
-"	opts = split(path, '.')"
-"	f = File(sprite_dir .. '/' .. path)"
-"   Resources[opts[1]] = Texture(f:read(), opts[2], opts[3])"
-"	f:close()"
-"end\n"
+			manager->next_game_tick += SKIP_TICKS;
+			loops++;
+		}
+		interpolation = (get_time() + SKIP_TICKS - manager->next_game_tick) / SKIP_TICKS;
 
-"Entry = Resources[Config['entry']]"
-"Scene:push(Entry:new())"
+		graphics_clear(graphics_instance());
 
-"timer = Timer(0, 1/Config.fps, function(dt)"
-"	Event.post(EVENT.UPDATE, dt)"
-"	Event.post(EVENT.DRAW)"
-"end)\n"
+		event_dispatch(handler, (Event) { .type = EVT_PREDRAW, .nr = dt });
+		event_dispatch(handler, (Event) { .type = EVT_DRAW, .nr = dt });
+		event_dispatch(handler, (Event) { .type = EVT_POSTDRAW, .nr = dt });
 
-"App.run()";
+		event_dispatch(handler, (Event) { .type = EVT_PREGUI, .nr = dt });
+		event_dispatch(handler, (Event) { .type = EVT_GUI, .nr = dt });
+		event_dispatch(handler, (Event) { .type = EVT_POSTGUI, .nr = dt });
 
-int main(int argc, const char* argv[]) {
-	//Init lua
-	L = luaL_newstate();
-
-	luaL_openlibs(L);
-	openlib_Math(L);
-	openlib_Window(L);
-	openlib_File(L);
-	openlib_Graphics(L);
-	openlib_Sprite(L);
-	openlib_Shader(L);
-	openlib_Texture(L);
-	openlib_Event(L);
-	openlib_Async(L);
-	openlib_ECS(L);
-
-	if (luaL_dostring(L, boot_source)) {
-		printf("Error loading boot script: %s\n", lua_tostring(L, -1));
-		lua_pop(L, 1);
+		graphics_present(graphics_instance());
 	}
+}
 
+void app_run(app_t* app) {
+#ifdef DEBUG
+	uv_pipe_t pipe1;
+	uv_pipe_init(uv_default_loop(), &pipe1, 0);
+	uv_pipe_bind(&pipe1, pipe_name);
+	uv_listen((uv_stream_t*)&pipe1, 1, console_on_freopen);
+	//FILE *fp = freopen(pipe_name, "w", stdout);
+#endif
+	uv_idle_t events;
+	events.data = app;
+	uv_idle_init(uv_default_loop(), &events);
+	uv_idle_start(&events, event_poll_cb);
+
+	app->is_running = 1;
+	app->next_game_tick = get_time();
+
+	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+}
+
+void app_stop(app_t* app) {
+	uv_stop(uv_default_loop());
+	window_close(window_instance());
+	app->is_running = 0;
+}
+
+static int w_app_run(lua_State* L) {
+	app_run(app_instance());
+	return 0;
+}
+
+static int w_app_stop(lua_State* L) {
+	app_stop(app_instance());
+	return 0;
+}
+
+int openlib_App(lua_State* Lua) {
+	L = Lua;
+	static luaL_Reg app_lib[] = {
+		{"run", w_app_run},
+		{"stop", app_stop},
+		{NULL, NULL}
+	};
+	create_lua_lib(Lua, App_mt, app_lib);	
 	return 0;
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "platform.h"
+#include "types.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +8,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <uv.h>
-#include <lauxlib.h>
+#include <lauxlib.h> 
 
 // Logging
 #ifdef DEBUG
@@ -20,25 +21,20 @@
 
 // Async functions
 inline double get_time() {
-	return glfwGetTime();
+	return glfwGetTime() * 1000.0;
 }
 
 // Random UUID generator
-typedef uint16_t UID[8]; //128 bit number
-
-inline void random_uuid(UID id) {
+inline void random_uid(UID *id) {
 	static int random_init = 0;
-	int i;
 	if (!random_init++) 
 		srand(get_time()*1000000);
-	for (i = 0; i < 8; i++)
-		id[i] = rand();
+	for (int i = 0; i < 4; i++)
+		((uint16_t*)id)[i] = rand();
 }
 
 inline void print_uuid(UID id) {
-	for (int i = 0; i < 8; i++)
-		printf("%04x ", id[i]);
-	printf("\n");
+	printf("%llx\n", id);
 }
 
 // Hashing utils
@@ -97,7 +93,7 @@ static unsigned long crc32_tab[] = {
 	  0x2d02ef8dL
 };
 
-inline unsigned long crc32(const unsigned char *s, unsigned int len)
+inline uint32_t crc32(const unsigned char *s, unsigned int len)
 {
 	unsigned int i;
 	unsigned long crc32val;
@@ -111,11 +107,8 @@ inline unsigned long crc32(const unsigned char *s, unsigned int len)
 	}
 	return crc32val;
 }
-
-inline unsigned int hash_int(const char* keystring, int len, int table_size) {
-
-	unsigned long key = crc32((unsigned char*)(keystring), len);
-
+//TODO: faster/better hash function
+inline uint32_t hash_int(uint64_t key) {
 	/* Robert Jenkins' 32 bit Mix Function */
 	key += (key << 12);
 	key ^= (key >> 22);
@@ -129,31 +122,12 @@ inline unsigned int hash_int(const char* keystring, int len, int table_size) {
 	/* Knuth's Multiplicative Method */
 	key = (key >> 3) * 2654435761;
 
-	return key % table_size;
+	return (uint32_t)key;
 }
 
-// Colors
-#define MAX_COLOR 0xFF;
-
-typedef enum color {
-	BLACK = 0x000000,	//0x80
-	DARK_BLUE = 0x0000AA,	//0x81
-	DARK_GREEN = 0x00AA00,	//0x82
-	DARK_AQUA = 0x00AAAA,	//0x83
-	DARK_RED = 0xAA0000,	//0x84
-	DARK_PURPLE = 0xAA00AA,	//0x85
-	GOLD = 0xFFAA00,	//0x86
-	GRAY = 0xAAAAAA,	//0x87
-	DARK_GRAY = 0x555555,	//0x88
-	BLUE = 0x5555FF,	//0x89
-	GREEN = 0x55FF55,	//0x8A
-	AQUA = 0x55FFFF,	//0x8B
-	RED = 0xFF5555,	//0x8C
-	LIGHT_PURPLE = 0xFF55FF,	//0x8D
-	YELLOW = 0xFFFF55,	//0x8E
-	WHITE = 0xFFFFFF,	//0x8F
-} color_t;
-extern const unsigned int color_table[];
+inline uint64_t hash_string(const char* keystring) {
+	return crc32((unsigned char*)(keystring), strlen(keystring));
+}
 
 // OpenGL helper functions
 
@@ -220,12 +194,35 @@ inline void print_table(lua_State *L, int index) {
 	lua_pop(L, 1);
 }
 
-#define LUA_ENUM(L, name, val) \
-	lua_pushlstring(L, #name, sizeof(#name)-1); \
-	lua_pushnumber(L, val); \
-	lua_settable(L, -3);
-#define C_ENUM_HELPER(cname, luaname)  cname,
-#define LUA_ENUM_HELPER(cname, luaname) LUA_ENUM(L, luaname, cname)
+//Set component at index -1 from table at index
+inline void set_component_from_table(lua_State* L, int index) {
+	lua_pushvalue(L, index);
+	lua_pushnil(L);
+	while (lua_next(L, -2)) {
+		lua_pushvalue(L, -2);
+		lua_pushvalue(L, -2);
+		lua_settable(L, -6);
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 1);
+}
+
+inline uint64_t hash_luatable(lua_State* L, int index) { //TODO: recursive for tables in tables
+	char data[512] = "{";
+	int len = 1;
+	lua_pushvalue(L, index);
+	lua_pushnil(L);
+	while (lua_next(L, -2)) {
+		lua_pushvalue(L, -2);
+		const char *key = lua_tostring(L, -1); //TODO: add more types
+		const char *value = lua_tostring(L, -2);
+		len += sprintf(&data[len], "%s = %s\n", key, value);
+		lua_pop(L, 2);
+	}
+	lua_pop(L, 1);
+	data[len++] = '}';
+	return crc32(data, len);
+}
 
 #define create_lua_lib(L, metaname, lib) \
 	luaL_newlib(L, lib); \
@@ -249,8 +246,11 @@ inline void print_table(lua_State *L, int index) {
 	lua_setmetatable(L, -2); \
 	lua_setglobal(L, metaname)
 	
-#define PUSH_LUA_POINTER(L, metaname, ptr) \
-	*(void**)lua_newuserdata(L, sizeof(void*)) = ptr, luaL_setmetatable(L, metaname)
+#define PUSH_LUA_POINTER(_L, _metaname, ptr) \
+	*(void**)lua_newuserdata(_L, sizeof(void*)) = ptr, luaL_setmetatable(_L, _metaname)
+
+#define POP_LUA_POINTER(_L, _metaname, _idx, _Type) \
+	*(_Type**)luaL_checkudata(_L, _idx, _metaname)
 
 // String functions
 #define TAB_LEN 4
@@ -273,6 +273,16 @@ inline size_t linelen(const char* s) {
 			return i;
 		else if (*c > 0x1F && *c < 0x80)
 			i++;
+		c++;
+	}
+	return i;
+}
+
+inline size_t textcharcount(const char* s) {
+	unsigned char* c = s;
+	size_t i = 0;
+	while (*c) {
+		if (*c > 0x1F && *c < 0x80) i++;
 		c++;
 	}
 	return i;
@@ -303,6 +313,18 @@ inline int str_to_mode(const char* mode) {
 	}
 	flags = m | o;
 	return flags;
+}
+
+inline int allign_ptr(void* ptr, size_t allign, size_t extra) {
+	int adjustment = allign - ((intptr_t)ptr & (allign - 1));
+	int needed = extra;
+	if (adjustment < needed) {
+		needed -= adjustment;
+		adjustment += allign * (needed / allign);
+		if (needed % allign > 0)
+			adjustment += allign;
+	}
+	return adjustment;
 }
 
 /*

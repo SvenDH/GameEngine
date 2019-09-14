@@ -1,78 +1,100 @@
 #pragma once
-#include "platform.h"
+#include "types.h"
 #include "event.h"
-#include "entity.h"
 #include "component.h"
 #include "data.h"
 #include "utils.h"
 
+#include <lua.h>
 #include <lauxlib.h>
+#include <lualib.h>
 
-#define Entity_mt		"Entity"
-#define Chunk_mt		"Chunk"
-#define World_mt		"World"
+#define Entity_mt		"entity"
 
-#define MAX_WORLDS 16
-#define MAX_COMPS 16
-#define MAX_CHUNKS 256
-#define CHUNK_SIZE 16384
+#define entity_gettype(_wld, _ent) \
+	entity_to_chunk((_wld), (_ent), NULL)->type
 
-#define NULL_ENTITY ((entity_handle)0)
+#define entity_getparent(_wld, _ent) \
+	entity_to_chunk((_wld), (_ent), NULL)->parent
 
-typedef union {
-	struct {
-		uint16_t index;
-		uint8_t chunk;
-		uint8_t world;
-	};
-	void* ptr;
-} entity_handle;
+#define entity_changetype(_wld, _ent, _new_type) \
+	entity_change((_wld), (_ent), entity_getparent(_wld, _ent), (_new_type))
 
-typedef enum {
-	CHUNK_NONE = 0,
-	CHUNK_LOADING = 1,
-	CHUNK_LOADED = 2,
-} chunk_state;
+#define entity_changeparent(_wld, _ent, _new_parent) \
+	entity_change((_wld), (_ent), (_new_parent), entity_gettype(_wld, _ent))
 
-struct Chunk;
 
-typedef struct Chunk {
-	int16_t id;
-	union {
-		struct {
-			uint32_t world;
-			uint32_t x;
-			uint32_t y;
-		};
-		uint8_t key[12];
-	};									//14
-	uint32_t state;						//18
-	uint32_t ent_count;					//22
+typedef uint64_t entity_t; //TODO: add index, user-id and salt
+typedef uint32_t type_t;
 
-	char data[4];
+typedef struct {
+	ObjectAllocator chunks;
+	ObjectAllocator archetypes;
+	ObjectAllocator systems;
 
-} Chunk;
+	hashmap_t entity_map;
+	hashmap_t chunk_map;
+	hashmap_t archetype_map;
 
-typedef struct World {
-	int id;
-	int chunkcount;
-	int max_ents;
-	int component_mask;
-	int nr_components;
-	uint8_t sizes[MAX_COMPS];
-	uint16_t offsets[MAX_COMPS];
-	Chunk* chunks[MAX_CHUNKS];
+	int chunk_index;
 } World;
 
-Chunk* chunk_new(int world, int x, int y);
-Chunk* chunk_get(int world, int x, int y);
-void chunk_delete(Chunk* chunk);
+typedef struct {
+	uint32_t id;				//4
+//	uint32_t _magic;
+	type_t type;				//8
+	entity_t parent;			//16
+	uint32_t ent_count;			//20
+	uint32_t max_ents;			//24
+	uint32_t next_children;		//28
+	uint32_t prev_children;		//32
+	uint8_t sizes[MAX_COMPS];	//64	TODO: make this global
+	char data[4];
+} Chunk;
 
-World* world_init(int nr_entities, int* sizes, int nr_components);
-World* world_get(int id);
-void world_delete(World* world);
+typedef struct {
+	type_t type;
+	int chunk_count;
+	int max_ents;
+	uint8_t sizes[MAX_COMPS];
+	uint16_t offsets[MAX_COMPS];
+	hashmap_t chunks;
+} Archetype;
 
-void* chunk_get_componentarray(Chunk* chunk, int type);
-void* component_get(entity_handle components, int type);
+typedef struct {
+	type_t and_mask;
+	type_t not_mask;
+	World* world;
+	hashmap_t archetypes;
+	void* data;
+} System;
+
+World* world_instance();
+
+Chunk* chunk_new(World* wld, type_t type, entity_t parent);
+Chunk* chunk_get(World* wld, type_t type, entity_t parent, int create);
+void chunk_delete(World* wld, Chunk* chunk);
+void* chunk_get_componentarray(Chunk* chunk, int component);
+void* chunk_get_component(Chunk* chunk, int component, int index);
+
+Archetype* archetype_new(World* wld, type_t components);
+Archetype* archetype_get(World* wld, type_t type, int create);
+void archetype_delete(World* wld, Archetype* archetype);
+
+entity_t entity_new(World* wld, entity_t id, type_t type, entity_t parent);
+entity_t* entity_get(World* wld, entity_t id);
+void* entity_getcomponent(World* wld, entity_t ent, int component);
+int entity_move(World* wld, Chunk* dest_chunk, Chunk* src_chunk, int dest, int src);
+int entity_change(World* wld, entity_t ent, entity_t new_parent, type_t new_type);
+Chunk* entity_to_chunk(World* wld, entity_t ent, int* index);
+void entity_delete(World* wld, entity_t ent);
+int entity_copy(Chunk* dest_chunk, Chunk* src_chunk, int dest, int src);
+
+System* system_new(World* wld, Callback cb, type_t and_mask, type_t not_mask, event_t evt);
+void system_delete(World* wld, System* system);
+
+//int debug_system(System* system, Event evt);
+int draw_system(System* system, Event evt);
+int move_system(System* system, Event evt);
 
 int openlib_ECS(lua_State* L);

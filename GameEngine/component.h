@@ -1,37 +1,35 @@
 #pragma once
 #include "platform.h"
-#include "texture.h"
-#include "sprite.h"
+#include "graphics.h"
 #include "utils.h"
+#include "resource.h"
 #include "math.h"
+#include "types.h"
 
-#include <stdint.h>
+#include <lualib.h>
 #include <lauxlib.h>
 
-#define COMPONENT_MASK(name) (1 << comp_##name)
-
 /* declare entity components */
-typedef UID ent_id;
-typedef uint8_t ent_type;
-
 typedef struct {
 	vec2 position;
-	struct ent_transform* parent;
 } ent_transform;
+
+typedef struct {
+	uint32_t children;
+	uint16_t nr_children;
+} ent_container;
 
 typedef struct {
 	vec2 speed;
 	vec2 acceletation;
 } ent_physics;
 
-//TODO: add vertices
 typedef struct {
-	Texture* texture;
+	rid_t texture;
+	vec2 offset;
+	uint16_t index;
 	uint32_t color;
 	float alpha;
-	uint16_t index;
-	int8_t offset[2];
-	int8_t size[2];
 } ent_sprite;
 
 typedef struct {
@@ -47,32 +45,23 @@ typedef struct {
 	int16_t next;
 } ent_collider;
 
-void get_integer(lua_State* L, int* integer);
-void set_integer(lua_State* L, int* integer, int i);
-
-void get_vector(lua_State* L, vec2* vector);
-void set_vector(lua_State* L, vec2* vector, int i);
-
-void get_texture(lua_State* L, Texture** tex);
-void set_texture(lua_State* L, Texture** tex, int i);
-
 /* define types and name for entities and components */
 #define ENTITY_DATA \
-X(id,		ent_id) \
-X(type,		ent_type) \
-X(transform,ent_transform, \
-	Y(position,		get_vector), \
-	Z(position,		set_vector)) \
-X(physics,	ent_physics, \
-	Y(speed,		get_vector) \
-	Y(acceletation,	get_vector), \
-	Z(speed,		set_vector) \
-	Z(acceletation,	set_vector)) \
-X(sprite,	ent_sprite, \
-	Y(texture,		get_texture), \
-	Z(texture,		set_texture)) \
-X(animation,ent_animation, , ) \
-X(collider,	ent_collider, , )
+X(id,		entity_t,		sizeof(entity_t)) \
+X(container,ent_container,	sizeof(ent_container), ) \
+X(transform,ent_transform,	sizeof(ent_transform), \
+	Y(position,		vector)) \
+X(physics,	ent_physics,	sizeof(ent_physics), \
+	Y(speed,		vector) \
+	Y(acceletation,	vector)) \
+X(sprite,	ent_sprite,		sizeof(ent_sprite), \
+	Y(texture,		texture) \
+	Y(offset,		vector) \
+	Y(index,		integer) \
+	Y(alpha,		float)) \
+X(animation,ent_animation,	sizeof(ent_animation), ) \
+X(collider,	ent_collider,	sizeof(ent_collider), ) \
+X(disabled,	void,			0, )
 //TODO: generate structs from this macro
 
 typedef enum component_type {
@@ -82,10 +71,14 @@ typedef enum component_type {
 	NR_COMPS
 };
 
-#define X(name, type, getter, setter) \
+typedef enum component_masks {
+#define X(name) name = 1 << comp_##name,
+	ENTITY_DATA
+#undef X
+};
+
+#define X(name) \
 int name##_index(lua_State *L); \
 int name##_newindex(lua_State *L);
 ENTITY_DATA
 #undef X
-
-#define COMP_MASK(name) (1 << comp_##name)

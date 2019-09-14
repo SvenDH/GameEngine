@@ -11,3 +11,8 @@
 #else
 #define pipe_name "AppConsole.sock"
 #endif
+
+#define MAX_PATH_LENGTH 256
+#define PAGE_SIZE 4096
+#define CHUNK_SIZE PAGE_SIZE
+#define MAX_COMPS 32 //(sizeof(int) * 8)

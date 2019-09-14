@@ -1,51 +1,83 @@
 #pragma once
-#include "utils.h"
 #include "data.h"
 #include <assert.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 
-#define EVENT_BUFFER_SIZE 4096
 #define Event_mt "Event"
 
-#define MAX_EVENT_DATA 1024
-
 #define EVENT_TYPES \
-	X(EVT_NONE, NONE) \
-	X(EVT_QUIT, QUIT) \
-	X(EVT_INPUT, INPUT) \
-	X(EVT_TEXT, TEXT) \
-	X(EVT_DRAW, DRAW) \
-	X(EVT_UPDATE, UPDATE) \
-	X(EVT_NEWENTITY, NEWENTITY) \
-	X(EVT_DELENTITY, DELENTITY) \
-	X(EVT_NEWWORLD, NEWWORLD)
+	X(NONE) \
+	X(QUIT) \
+	X(INPUT) \
+	X(TEXT) \
+	X(FILEREAD) \
+	X(FILEWRITE) \
+	X(PREUPDATE) \
+	X(UPDATE) \
+	X(POSTUPDATE) \
+	X(PREDRAW) \
+	X(DRAW) \
+	X(POSTDRAW) \
+	X(PREGUI) \
+	X(GUI) \
+	X(POSTGUI) \
+	X(NEWENTITY) \
+	X(CHANGEENTITY) \
+	X(DELENTITY) \
+	X(NEWCOMPONENT) \
+	X(DELCOMPONENT) \
+	X(NEWTYPE) \
+	X(DELTYPE)
 
-#define X C_ENUM_HELPER
-typedef enum event_t {
+typedef enum {
+#define X(name) EVT_##name,
 	EVENT_TYPES
-	MAX_EVENTS
-} event_t;
 #undef X
-
-typedef void(*event_cb) (void *, event_t, char *, size_t);
-//cb is either callback or lua function, data can be lua_State*
-typedef struct {
-	event_cb cb;
-	void* data;
-	struct Listener* next;
-	int use_lua;
-} Listener;
+	NUM_EVENTS
+};
 
 typedef struct {
-	RingBuffer* event_queue;
-	MemoryPool* pool;
-	Listener* listeners[MAX_EVENTS];
-} EventManager;
+	uint32_t type;
+	union {
+		uint64_t data;
+		double nr;
+		void* ptr;
+		int ref;
+	};
+} Event;
 
-Listener* event_register(event_t evt, event_cb cb, void* data);
-int event_push(event_t evt, char* data, size_t size);
-void event_pump();
+typedef int(*Callback) (void*, Event);
+
+typedef struct {
+	void* next;
+	void* prev;
+	union {
+		struct {
+			void* receiver;
+			Callback callback;
+		};
+		struct {
+			int lua_ref;
+			int lua_cb;
+		};
+	};
+	lua_State* L;
+} Delegate;
+
+typedef struct {
+	ObjectAllocator;
+	queue_t queue;
+	hashmap_t delegate_map;
+} EventHandler;
+
+EventHandler* eventhandler_instance();
+void eventhandler_init(EventHandler* eventhandler, const char* name);
+Delegate* event_register(EventHandler* eventhandler, void* receiver, event_t evt, Callback cb);
+Delegate* event_getdelegates(EventHandler* eventhandler, event_t evt);
+int event_post(EventHandler* eventhandler, Event evt);
+void event_dispatch(EventHandler* eventhandler, Event evt);
+void event_pump(EventHandler* eventhandler);
 
 int openlib_Event(lua_State* L);

@@ -1,0 +1,206 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\graphics">
+      <UniqueIdentifier>{cc24972f-abff-4aa6-b26a-c08195a47cf8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\utilities">
+      <UniqueIdentifier>{4c7a2b19-1b67-422a-968b-6f5983ad77ec}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\async">
+      <UniqueIdentifier>{8214f4eb-b0a8-44a3-a29f-81c5417d1e3e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\utilities\memory">
+      <UniqueIdentifier>{8052b9bc-59b9-4a2f-9937-c21a3a4fa6df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\utilities\datastruct">
+      <UniqueIdentifier>{81698667-e7c4-4c44-8b72-86a1d5a61c15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\ecs">
+      <UniqueIdentifier>{f2664195-19bb-4fd9-8ef6-aa3237990a73}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\resources">
+      <UniqueIdentifier>{38e0ed47-3c83-4cf9-9843-caebcb641a58}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="platform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="types.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="window.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="async.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="event.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="file.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="component.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ecs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="math.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="memory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="stb_image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="stb_textedit.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="graphics.c">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="shader.c">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="texture.c">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="component.c">
+      <Filter>Source Files\ecs</Filter>
+    </ClCompile>
+    <ClCompile Include="systems.c">
+      <Filter>Source Files\ecs</Filter>
+    </ClCompile>
+    <ClCompile Include="chunks.c">
+      <Filter>Source Files\ecs</Filter>
+    </ClCompile>
+    <ClCompile Include="archetype.c">
+      <Filter>Source Files\ecs</Filter>
+    </ClCompile>
+    <ClCompile Include="event.c">
+      <Filter>Source Files\async</Filter>
+    </ClCompile>
+    <ClCompile Include="window.c">
+      <Filter>Source Files\async</Filter>
+    </ClCompile>
+    <ClCompile Include="main.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="app.c">
+      <Filter>Source Files\async</Filter>
+    </ClCompile>
+    <ClCompile Include="object.c">
+      <Filter>Source Files\utilities\memory</Filter>
+    </ClCompile>
+    <ClCompile Include="global.c">
+      <Filter>Source Files\utilities\memory</Filter>
+    </ClCompile>
+    <ClCompile Include="map.c">
+      <Filter>Source Files\utilities\datastruct</Filter>
+    </ClCompile>
+    <ClCompile Include="queue.c">
+      <Filter>Source Files\utilities\datastruct</Filter>
+    </ClCompile>
+    <ClCompile Include="math.c">
+      <Filter>Source Files\utilities</Filter>
+    </ClCompile>
+    <ClCompile Include="vector.c">
+      <Filter>Source Files\utilities\datastruct</Filter>
+    </ClCompile>
+    <ClCompile Include="entity.c">
+      <Filter>Source Files\ecs</Filter>
+    </ClCompile>
+    <ClCompile Include="buffer.c">
+      <Filter>Source Files\utilities\memory</Filter>
+    </ClCompile>
+    <ClCompile Include="timer.c">
+      <Filter>Source Files\utilities</Filter>
+    </ClCompile>
+    <ClCompile Include="ecs.c">
+      <Filter>Source Files\ecs</Filter>
+    </ClCompile>
+    <ClCompile Include="resources.c">
+      <Filter>Source Files\resources</Filter>
+    </ClCompile>
+    <ClCompile Include="image.c">
+      <Filter>Source Files\resources</Filter>
+    </ClCompile>
+    <ClCompile Include="stream.c">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="canvas.c">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="glad.c">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="file.c">
+      <Filter>Source Files\resources</Filter>
+    </ClCompile>
+    <ClCompile Include="script.c">
+      <Filter>Source Files\resources</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\resources\scripts\menu.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\resources\scripts\menuscene.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\resources\scripts\optionscene.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\resources\scripts\startscene.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\resources\config.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\resources\scripts\enitities.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\resources\resources.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\resources\scene.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\resources\console.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\resources\scripts\gamescene.lua">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
+</Project>
