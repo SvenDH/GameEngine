@@ -2,7 +2,7 @@
 #include "utils.h"
 
 #define HASHMAP_MAX_CHAIN_LENGTH 8
-#define INITIAL_MAP_SIZE	16 * sizeof(hash_node)
+#define INITIAL_MAP_SIZE	4 * sizeof(hash_node)
 
 #define MAP_SIZE(_map)	((_map)->cap / sizeof(hash_node))
 #define MAP_ENTRY(_map, _i) (((hash_node*)m->data)[(_i)])
@@ -60,9 +60,9 @@ int _hashmap_put(hashmap_t* m, key_t key, void* value) {
 		
 		index = hashmap_hash(m, key);
 	}
-
+	if (MAP_ENTRY(m, index).count == 0) 
+		m->used += sizeof(hash_node);
 	MAP_ENTRY(m, index) = (hash_node) { key, 1, value };
-	m->used += sizeof(hash_node);
 
 	return 0;
 }

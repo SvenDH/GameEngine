@@ -14,14 +14,33 @@ _type* _fname##_instance() { \
 	return manager; \
 }
 
+typedef uint8_t byte;
+typedef unsigned int uint;
+typedef unsigned short ushort;
+
 typedef uint64_t UID; //64 bit number
-typedef uint32_t event_t;
 typedef uint64_t key_t;
+
+typedef uint64_t entity_t; //TODO: add index, user-id and salt
+typedef uint32_t type_t;
+typedef uint32_t chunk_t;
+
+typedef struct {
+	int t;
+	union {
+		uint64_t data;
+		double nr;
+		void* ptr;
+	};
+} variant_t;
+
 typedef char color_t[4];
 
 typedef float vec2[2];
 typedef float vec3[3];
 typedef vec3  mat3[3];
+
+typedef float rect2[4];
 
 typedef struct {
 	mat3 model;
@@ -31,8 +50,3 @@ typedef struct {
 	color_t col;
 	uint32_t idx;
 } col_vertex_t;
-
-typedef struct {
-	size_t size;
-	char name[16];
-} TypeMetaData;

@@ -1,16 +1,16 @@
-#include "memory.h"
+#include "data.h"
 
-void objectallocator_init(ObjectAllocator* ob, const char* name, size_t element_size, size_t block_size, size_t allign) {
+void object_init(object_allocator_t* ob, const char* name, size_t element_size, size_t block_size, size_t allign) {
 	memoryuser_init(ob, name);
 	ALLOCATOR_INIT(ob, memoryuser_alloc(ob, block_size * element_size, allign), block_size * element_size);
 	ob->element_size = element_size;
 	ob->block_size = block_size * element_size;
 	ob->allign = allign;
-	objectallocator_clear(ob);
-	//TODO: make element_size and block_size powers of 2
+	object_clear(ob);
+	//TODO: make sure element_size and block_size are powers of 2
 }
 
-void* objectallocator_alloc(ObjectAllocator* ob, size_t size) {
+void* object_alloc(object_allocator_t* ob, size_t size) {
 	assert(size == ob->element_size);
 	if (ob->free_list) {
 		void* recycle = ob->free_list;
@@ -40,12 +40,12 @@ void* objectallocator_alloc(ObjectAllocator* ob, size_t size) {
 	return ptr;
 }
 
-void objectallocator_free(ObjectAllocator* ob, void* ptr) {
+void object_free(object_allocator_t* ob, void* ptr) {
 	*(void**)ptr = ob->free_list;
 	ob->free_list = ptr;
 }
 
-void objectallocator_clear(ObjectAllocator* ob) {
+void object_clear(object_allocator_t* ob) {
 	ob->used = 0;
 	ob->block_index = 0;
 	ob->free_list = NULL;

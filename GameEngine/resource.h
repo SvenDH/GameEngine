@@ -2,13 +2,17 @@
 #include "data.h"
 #include "file.h"
 
-#define Resource_mt "Resource"
+#define Resource_mt "resource"
 
-#define LOAD_RESOURCE(_L, _i) do { \
-								luaL_getmetafield((_L), (_i), "load"); \
-								lua_pushvalue((_L), (_i)); \
-								lua_call((_L), 1, 0); \
-							} while (0)
+//TODO: check for null resource
+#define NULL_RES (rid_t){ .value = 0 }
+
+#define LOAD_RESOURCE(_L, _i) \
+do { \
+	luaL_getmetafield((_L), (_i), "load"); \
+	lua_pushvalue((_L), (_i)); \
+	lua_call((_L), 1, 0); \
+} while (0)
 
 typedef union {
 	struct {
@@ -38,24 +42,32 @@ typedef struct {
 
 typedef struct {
 	resource_t;
-	GLuint ID;
+	uint queue;
 	int format;
 	int width, height, depth;
 } texture_t;
 
 typedef struct {
 	resource_t;
-	GLuint ID;
+	uint queue;
 	int staged;
 } shader_t;
 
-#define RESOURCE_DATA \
-X(IMAGE, image) \
-X(SCRIPT, script) \
-X(TEXTURE, texture) \
-X(SHADER, shader)
+typedef struct {
+	resource_t;
+	int length, rate, channels, bits;
+	const char* data;
+} sound_t;
 
-typedef enum resource_type {
+
+#define RESOURCE_DATA \
+	X(IMAGE, image) \
+	X(SCRIPT, script) \
+	X(TEXTURE, texture) \
+	X(SHADER, shader) \
+	X(SOUND, sound)
+
+enum resource_enum {
 #define X(num, name) RES_##num,
 	RESOURCE_DATA
 #undef X
@@ -75,19 +87,23 @@ typedef union {
 } res_union;
 
 typedef struct {
-	ObjectAllocator;
+	object_allocator_t;
 	hashmap_t resources;
 	hashmap_t requests;
 	buffer_t buffer;
 } resourcemanager_t;
 
 void resourcemanager_init(resourcemanager_t* manager, const char* name);
-resource_t* resource_new(resourcemanager_t* rm, uint32_t name, int type, intptr_t load);
+rid_t resource_new(resourcemanager_t* rm, uint32_t name, int type, intptr_t load);
 resource_t* resource_get(resourcemanager_t* rm, rid_t uid);
+int resource_isloaded(resourcemanager_t* rm, rid_t resource);
 void resource_release(resourcemanager_t* rm, rid_t uid);
 
 void image_load(image_t* image, const char* data, size_t len);
 void image_unload(image_t* image);
+
+void sound_load(sound_t* sound, const char* data, size_t len);
+void sound_unload(sound_t* sound);
 
 void script_load(script_t* script, lua_State* L, const char* data, size_t len);
 void script_unload(script_t* script);

@@ -7,8 +7,16 @@
 #include <string.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <AL/al.h>
+#include <AL/alc.h>
+#include <AL/alext.h>
 #include <uv.h>
 #include <lauxlib.h> 
+
+// Use this magic number to avoid floating point issues
+#define LARGE_ELEMENT_FI 1.01239812
+
+#define _LITTLE_ENDIAN_ (((union { unsigned x; unsigned char c; }){1}).c)
 
 // Logging
 #ifdef DEBUG
@@ -28,7 +36,7 @@ inline double get_time() {
 inline void random_uid(UID *id) {
 	static int random_init = 0;
 	if (!random_init++) 
-		srand(get_time()*1000000);
+		srand((unsigned int)get_time()*1000000);
 	for (int i = 0; i < 4; i++)
 		((uint16_t*)id)[i] = rand();
 }
@@ -129,39 +137,87 @@ inline uint64_t hash_string(const char* keystring) {
 	return crc32((unsigned char*)(keystring), strlen(keystring));
 }
 
+static const unsigned short MortonTable256[256] = {
+  0x0000, 0x0001, 0x0004, 0x0005, 0x0010, 0x0011, 0x0014, 0x0015,
+  0x0040, 0x0041, 0x0044, 0x0045, 0x0050, 0x0051, 0x0054, 0x0055,
+  0x0100, 0x0101, 0x0104, 0x0105, 0x0110, 0x0111, 0x0114, 0x0115,
+  0x0140, 0x0141, 0x0144, 0x0145, 0x0150, 0x0151, 0x0154, 0x0155,
+  0x0400, 0x0401, 0x0404, 0x0405, 0x0410, 0x0411, 0x0414, 0x0415,
+  0x0440, 0x0441, 0x0444, 0x0445, 0x0450, 0x0451, 0x0454, 0x0455,
+  0x0500, 0x0501, 0x0504, 0x0505, 0x0510, 0x0511, 0x0514, 0x0515,
+  0x0540, 0x0541, 0x0544, 0x0545, 0x0550, 0x0551, 0x0554, 0x0555,
+  0x1000, 0x1001, 0x1004, 0x1005, 0x1010, 0x1011, 0x1014, 0x1015,
+  0x1040, 0x1041, 0x1044, 0x1045, 0x1050, 0x1051, 0x1054, 0x1055,
+  0x1100, 0x1101, 0x1104, 0x1105, 0x1110, 0x1111, 0x1114, 0x1115,
+  0x1140, 0x1141, 0x1144, 0x1145, 0x1150, 0x1151, 0x1154, 0x1155,
+  0x1400, 0x1401, 0x1404, 0x1405, 0x1410, 0x1411, 0x1414, 0x1415,
+  0x1440, 0x1441, 0x1444, 0x1445, 0x1450, 0x1451, 0x1454, 0x1455,
+  0x1500, 0x1501, 0x1504, 0x1505, 0x1510, 0x1511, 0x1514, 0x1515,
+  0x1540, 0x1541, 0x1544, 0x1545, 0x1550, 0x1551, 0x1554, 0x1555,
+  0x4000, 0x4001, 0x4004, 0x4005, 0x4010, 0x4011, 0x4014, 0x4015,
+  0x4040, 0x4041, 0x4044, 0x4045, 0x4050, 0x4051, 0x4054, 0x4055,
+  0x4100, 0x4101, 0x4104, 0x4105, 0x4110, 0x4111, 0x4114, 0x4115,
+  0x4140, 0x4141, 0x4144, 0x4145, 0x4150, 0x4151, 0x4154, 0x4155,
+  0x4400, 0x4401, 0x4404, 0x4405, 0x4410, 0x4411, 0x4414, 0x4415,
+  0x4440, 0x4441, 0x4444, 0x4445, 0x4450, 0x4451, 0x4454, 0x4455,
+  0x4500, 0x4501, 0x4504, 0x4505, 0x4510, 0x4511, 0x4514, 0x4515,
+  0x4540, 0x4541, 0x4544, 0x4545, 0x4550, 0x4551, 0x4554, 0x4555,
+  0x5000, 0x5001, 0x5004, 0x5005, 0x5010, 0x5011, 0x5014, 0x5015,
+  0x5040, 0x5041, 0x5044, 0x5045, 0x5050, 0x5051, 0x5054, 0x5055,
+  0x5100, 0x5101, 0x5104, 0x5105, 0x5110, 0x5111, 0x5114, 0x5115,
+  0x5140, 0x5141, 0x5144, 0x5145, 0x5150, 0x5151, 0x5154, 0x5155,
+  0x5400, 0x5401, 0x5404, 0x5405, 0x5410, 0x5411, 0x5414, 0x5415,
+  0x5440, 0x5441, 0x5444, 0x5445, 0x5450, 0x5451, 0x5454, 0x5455,
+  0x5500, 0x5501, 0x5504, 0x5505, 0x5510, 0x5511, 0x5514, 0x5515,
+  0x5540, 0x5541, 0x5544, 0x5545, 0x5550, 0x5551, 0x5554, 0x5555
+};
+
+inline uint32_t mortonencode(short x, short y) {
+	return	MortonTable256[y >> 8] << 17 |
+			MortonTable256[x >> 8] << 16 |
+			MortonTable256[y & 0xFF] << 1 |
+			MortonTable256[x & 0xFF];
+}
+
 // OpenGL helper functions
 
-inline GLenum glCheckError_(const char *file, int line) {
+inline GLenum gl_check_error_(const char* file, int line) {
 	GLenum errorCode;
 	char* error = "NO_ERROR";
 	while ((errorCode = glGetError()) != GL_NO_ERROR) {
 		switch (errorCode) {
-			case GL_INVALID_ENUM:                  error = "INVALID_ENUM"; break;
-			case GL_INVALID_VALUE:                 error = "INVALID_VALUE"; break;
-			case GL_INVALID_OPERATION:             error = "INVALID_OPERATION"; break;
-			case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
-			case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
+			case GL_INVALID_ENUM:					error = "INVALID_ENUM"; break;
+			case GL_INVALID_VALUE:					error = "INVALID_VALUE"; break;
+			case GL_INVALID_OPERATION:				error = "INVALID_OPERATION"; break;
+			case GL_OUT_OF_MEMORY:					error = "OUT_OF_MEMORY"; break;
+			case GL_INVALID_FRAMEBUFFER_OPERATION:	error = "INVALID_FRAMEBUFFER_OPERATION"; break;
+			default:								error = "UNKOWN GL ERROR"; break;
 		}
 		fprintf(stderr, "%s | %s (%i)\n", error, file, line);
 	}
 	return errorCode;
 }
-#define gl_check_error()	   glCheckError_(__FILE__, __LINE__)
+#define gl_check_error()	   gl_check_error_(__FILE__, __LINE__)
 
-inline struct sockaddr_storage* get_address(uv_tcp_t* peer, size_t* addrlen) {
-	*addrlen = sizeof(struct sockaddr_storage);
-	struct sockaddr_storage* addr = malloc(*addrlen);
-	uv_tcp_getpeername(peer, &addr, &addrlen);
-	return addr;
-}
 
-inline void print_address(struct sockaddr_storage* addr, size_t addrlen) {
-	char hostbuf[NI_MAXHOST], portbuf[NI_MAXSERV];
-	if (getnameinfo(&addr, addrlen, hostbuf, NI_MAXHOST, portbuf, NI_MAXSERV, 0) == 0)
-		printf("client (%s:%s) connected\n", hostbuf, portbuf);
-	else
-		printf("client (unknown) connected\n");
+inline ALenum al_check_error_(const char* file, int line) {
+	ALenum errorCode;
+	char* error = "NO_ERROR";
+	while ((errorCode = alGetError()) != AL_NO_ERROR) {
+		switch (errorCode) {
+			case AL_INVALID_NAME:					error = "AL_INVALID_NAME"; break;
+			case AL_INVALID_ENUM:					error = "AL_INVALID_ENUM"; break;
+			case AL_INVALID_VALUE:					error = "AL_INVALID_VALUE"; break;
+			case AL_INVALID_OPERATION:				error = "AL_INVALID_OPERATION"; break;
+			case AL_OUT_OF_MEMORY:					error = "AL_OUT_OF_MEMORY"; break;
+			default:								error = "UNKNOWN AL ERROR"; break;
+		}
+		fprintf(stderr, "%s | %s (%i)\n", error, file, line);
+	}
+	return errorCode;
 }
+#define al_check_error()	   al_check_error_(__FILE__, __LINE__)
+
 
 // Lua helper functions
 inline int is_in_table(lua_State *L, const char* str, int index) {
@@ -256,7 +312,7 @@ inline uint64_t hash_luatable(lua_State* L, int index) { //TODO: recursive for t
 #define TAB_LEN 4
 
 inline size_t linecount(const char* s) {
-	unsigned char* c = s;
+	const char* c = s;
 	size_t i = (*c != '\0');
 	while (*c) {
 		if (*c++ == '\n')
@@ -266,7 +322,7 @@ inline size_t linecount(const char* s) {
 }
 
 inline size_t linelen(const char* s) {
-	unsigned char* c = s;
+	const char* c = s;
 	size_t i = 0;
 	while (*c) {
 		if (*c == '\n')
@@ -279,7 +335,7 @@ inline size_t linelen(const char* s) {
 }
 
 inline size_t textcharcount(const char* s) {
-	unsigned char* c = s;
+	const char* c = s;
 	size_t i = 0;
 	while (*c) {
 		if (*c > 0x1F && *c < 0x80) i++;
@@ -327,53 +383,50 @@ inline int allign_ptr(void* ptr, size_t allign, size_t extra) {
 	return adjustment;
 }
 
-/*
-inline char **tok_to_list(const char* line, const char *delim) {
-	char* tmp[1024];
-	char dup[1024];
-	const char* tok;
-	int i;
-	strcpy(dup, line);
-	for (i = 0, tok = strtok(dup, delim); tok && *tok; i++, tok = strtok(NULL, delim))
-		tmp[i] = strdup(tok);
-	char **arr = memcpy(malloc(i * sizeof(char*)), tmp, i * sizeof(char*));
-	return arr;
+inline int setbitrange(int l, int r) {
+	return (((1 << (l - 1)) - 1) ^((1 << (r)) - 1));
 }
 
-inline int *tok_to_int(char* line, const char *delim) {
-	int tmp[4048], i;
-	const char* tok;
-	for (i = 0, tok = strtok(line, delim); tok && *tok; i++, tok = strtok(NULL, delim))
-		tmp[i] = atoi(tok);
-	int *arr = malloc(i * sizeof(int));
-	memcpy(arr, tmp, i * sizeof(int));
-	return arr;
+
+inline int32_t convert_little_int(char* buffer, size_t len) {
+	int32_t a = 0;
+	if (_LITTLE_ENDIAN_)
+		memcpy(&a, buffer, len);
+	else
+		for (size_t i = 0; i < len; ++i)
+			(char*)(&a)[3 - i] = buffer[i];
+	return a;
 }
 
-// Data struct macros
-#define enqueue(b, r, t) \
-	if (((b)->tail_ + 1) % (b)->max_ != (b)->head_) { \
-		(b)->tail_ = ((b)->tail_ + 1) % (b)->max_; \
-		((t*)(b)->data_)[(b)->tail_] = (r); \
-		return 0; \
-	} \
-	else return 1
 
-#define peek(b, r, t) \
-	if ((b)->head_ != (b)->tail_) { \
-		r = ((t*)(b)->data_)[(b)->head_]; \
-	}
+inline size_t load_wav_header(const char* data, size_t len, byte* channels, int* samplerate, byte* bitspersample, ushort* compression) {
+	//the RIFF header
+	if (strncmp(data, "RIFF", 4) != 0)
+		return -1;
+	//the WAVE header
+	if (strncmp(&data[8], "WAVE", 4) != 0)
+		return -1;
+	//the fmt
+	*compression = convert_little_int(&data[20],2);
+	*channels = convert_little_int(&data[22], 2);
+	*samplerate = convert_little_int(&data[24], 4);
+	*bitspersample = convert_little_int(&data[34], 2);
+	//the data header
+	if (strncmp(&data[36], "data", 4) != 0)
+		return -1;
+	//return size of data chunk
+	return convert_little_int(&data[40], 4);
+}
 
-#define dequeue(b, r, t) \
-	if ((b)->head_ != (b)->tail_) { \
-		(b)->head_ = ((b)->head_ + 1) % (b)->max_; \
-		r = ((t*)(b)->data_)[(b)->head_]; \
-	}
-
-#define push(b, r, t) \
-	((t*)(b)->data_)[++(b)->top_] = r
-
-#define pop(b, r, t) \
-	r = ((t*)(b)->data_)[(b)->top_--]
-
-*/
+#define WAVE_HEADER_SIZE 44
+inline char* load_wav(const char* data, size_t* len, uint* channels, uint* samplerate, uint* bitspersample, int* compression) {
+	size_t size = load_wav_header(data, *len, channels, samplerate, bitspersample, compression);
+	if (size < 0)
+		return NULL;
+	assert(size + WAVE_HEADER_SIZE == *len);
+	char* buffer = malloc(size);
+	if (buffer)
+		memcpy(buffer, data + WAVE_HEADER_SIZE, size);
+	*len = size;
+	return buffer;
+}

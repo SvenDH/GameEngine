@@ -1,6 +1,5 @@
-#include "async.h"
+#include "app.h"
 #include "utils.h"
-#include "window.h"
 #include "graphics.h"
 
 static lua_State* L;
@@ -9,8 +8,8 @@ void app_init(app_t* manager, const char* name) {
 	manager->name = name;
 	manager->is_running = 0;
 	manager->next_game_tick = 0;
-
-	event_register(eventhandler_instance(), manager, EVT_QUIT, app_stop);
+	memset(manager->keys, 0, 1024);
+	event_register(eventhandler_instance(), manager, quit, app_stop, NULL);
 }
 
 #ifdef DEBUG
@@ -42,7 +41,7 @@ void console_on_freopen(uv_stream_t* server, int status) {
 
 void event_poll_cb(uv_idle_t* handle) {
 	app_t* manager = handle->data;
-	EventHandler* handler = eventhandler_instance();
+	eventhandler_t* handler = eventhandler_instance();
 	window_poll(window_instance());
 	event_pump(handler);
 	if (manager->is_running) {
@@ -50,31 +49,41 @@ void event_poll_cb(uv_idle_t* handle) {
 		double dt = get_time() - manager->next_game_tick;
 		int loops = 0;
 		while (get_time() > manager->next_game_tick && loops < MAX_FRAMESKIP) {
-			//print("%d\n", interpolation);
-			event_dispatch(handler, (Event) { .type = EVT_PREUPDATE, .nr = interpolation });
-			event_dispatch(handler, (Event) { .type = EVT_UPDATE, .nr = interpolation });
-			event_dispatch(handler, (Event) { .type = EVT_POSTUPDATE, .nr = interpolation });
-
+			//TODO: make stage objects/functions
+			event_post(handler, (event_t) { .type = on_preupdate, .p0.nr = interpolation });
+			event_pump(handler);
+			event_post(handler, (event_t) { .type = on_update, .p0.nr = interpolation });
+			event_pump(handler);
+			event_post(handler, (event_t) { .type = on_postupdate, .p0.nr = interpolation });
+			event_pump(handler);
 			manager->next_game_tick += SKIP_TICKS;
 			loops++;
 		}
 		interpolation = (get_time() + SKIP_TICKS - manager->next_game_tick) / SKIP_TICKS;
-
+		
 		graphics_clear(graphics_instance());
 
-		event_dispatch(handler, (Event) { .type = EVT_PREDRAW, .nr = dt });
-		event_dispatch(handler, (Event) { .type = EVT_DRAW, .nr = dt });
-		event_dispatch(handler, (Event) { .type = EVT_POSTDRAW, .nr = dt });
+		event_post(handler, (event_t) { .type = on_predraw, .p0.nr = dt });
+		event_pump(handler);
+		event_post(handler, (event_t) { .type = on_draw, .p0.nr = dt });
+		event_pump(handler);
+		event_post(handler, (event_t) { .type = on_postdraw, .p0.nr = dt });
+		event_pump(handler);
 
-		event_dispatch(handler, (Event) { .type = EVT_PREGUI, .nr = dt });
-		event_dispatch(handler, (Event) { .type = EVT_GUI, .nr = dt });
-		event_dispatch(handler, (Event) { .type = EVT_POSTGUI, .nr = dt });
+		event_post(handler, (event_t) { .type = on_pregui, .p0.nr = dt });
+		event_pump(handler);
+		event_post(handler, (event_t) { .type = on_gui, .p0.nr = dt });
+		event_pump(handler);
+		event_post(handler, (event_t) { .type = on_postgui, .p0.nr = dt });
+		event_pump(handler);
 
 		graphics_present(graphics_instance());
+
+		window_swap(window_instance());
 	}
 }
 
-void app_run(app_t* app) {
+int app_run(app_t* app) {
 #ifdef DEBUG
 	uv_pipe_t pipe1;
 	uv_pipe_init(uv_default_loop(), &pipe1, 0);
@@ -88,15 +97,16 @@ void app_run(app_t* app) {
 	uv_idle_start(&events, event_poll_cb);
 
 	app->is_running = 1;
-	app->next_game_tick = get_time();
+	app->next_game_tick = (int)get_time();
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 }
 
-void app_stop(app_t* app) {
+int app_stop(app_t* app, event_t evt) {
 	uv_stop(uv_default_loop());
 	window_close(window_instance());
 	app->is_running = 0;
+	return 0;
 }
 
 static int w_app_run(lua_State* L) {
@@ -105,7 +115,7 @@ static int w_app_run(lua_State* L) {
 }
 
 static int w_app_stop(lua_State* L) {
-	app_stop(app_instance());
+	event_dispatch(eventhandler_instance(), (event_t) { .type = on_quit });
 	return 0;
 }
 
@@ -113,7 +123,7 @@ int openlib_App(lua_State* Lua) {
 	L = Lua;
 	static luaL_Reg app_lib[] = {
 		{"run", w_app_run},
-		{"stop", app_stop},
+		{"stop", w_app_stop},
 		{NULL, NULL}
 	};
 	create_lua_lib(Lua, App_mt, app_lib);	

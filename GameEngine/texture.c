@@ -11,7 +11,7 @@ void texture_load(texture_t* texture, image_t* image, int width, int height) {
 }
 
 void texture_unload(texture_t* texture) {
-	glDeleteTextures(1, &texture->ID);
+	glDeleteTextures(1, &texture->queue);
 }
 
 void texture_generate(texture_t* texture, int width, int height, int depth, int channels, const char* data) {
@@ -34,8 +34,8 @@ void texture_generate(texture_t* texture, int width, int height, int depth, int 
 		printf("error: Too many sub images: %i, max images: %i", texture->depth, GL_MAX_ARRAY_TEXTURE_LAYERS);
 		return;
 	}
-	glGenTextures(1, &texture->ID);
-	glBindTexture(GL_TEXTURE_2D_ARRAY, texture->ID);
+	glGenTextures(1, &texture->queue);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, texture->queue);
 	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -46,11 +46,15 @@ void texture_generate(texture_t* texture, int width, int height, int depth, int 
 	glBindTexture(GL_TEXTURE_2D_ARRAY, current);
 }
 
+void texture_delete(texture_t* texture) {
+	glDeleteTextures(1, &texture->queue);
+}
+
 void texture_sheet(texture_t* texture, int sheet_w, int sheet_h, const char* data) {
 	int columns = sheet_w / texture->width;
 	int rows = sheet_h / texture->height;
 
-	glBindTexture(GL_TEXTURE_2D_ARRAY, texture->ID);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, texture->queue);
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, sheet_w);
 	for (int x = 0; x < columns; x++) {
 		for (int y = 0; y < rows; y++) {
@@ -68,15 +72,17 @@ void texture_sheet(texture_t* texture, int sheet_w, int sheet_h, const char* dat
 }
 
 void texture_subimage(texture_t* texture, int index, const char* data) {
-	glBindTexture(GL_TEXTURE_2D_ARRAY, texture->ID);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, texture->queue);
 	glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, index, texture->width, texture->height, 1, texture->format, GL_UNSIGNED_BYTE, data);
 }
 
 int texture_bind(texture_t* tex) {
-	int changed = (tex->ID != current);
+	GLuint id = 0;
+	if (tex) id = tex->queue;
+	int changed = (id != current);
 	if (changed) {
-		glBindTexture(GL_TEXTURE_2D_ARRAY, tex->ID);
-		current = tex->ID;
+		glBindTexture(GL_TEXTURE_2D_ARRAY, id);
+		current = id;
 	}
 	return changed;
 }

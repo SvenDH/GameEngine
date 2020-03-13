@@ -1,8 +1,8 @@
 #include "graphics.h"
 #include "memory.h"
-#include "window.h"
 #include "utils.h"
 #include "math.h"
+#include "ecs.h"
 
 #include <lauxlib.h>
 #include <lualib.h>
@@ -13,13 +13,14 @@
 #define MATERIAL_BUFFER_SIZE MAX_QUADS * sizeof(col_vertex_t)
 
 void graphics_init(graphics_t* gfx, const char* name) {
-	objectallocator_init(&gfx->canvases, name, sizeof(Canvas), 8, 4);
+	object_init(&gfx->cameras, name, sizeof(camera_t), 8, 4);
+	hashmap_init(&gfx->cameramap);
 
 	gfx->display_state.width = 0;
 	gfx->display_state.height = 0;
 
-	gfx->draw_state.texture = NULL;
-	gfx->draw_state.shader = NULL;
+	gfx->draw_state.texture.value = 0;
+	gfx->draw_state.shader.value = 0;
 	gfx->draw_state.quad_count = 0;
 	gfx->draw_state.map.stream[0] = NULL;
 	gfx->draw_state.map.stream[1] = NULL;
@@ -44,12 +45,11 @@ void graphics_init(graphics_t* gfx, const char* name) {
 
 	resourcemanager_t* rm = resourcemanager_instance();
 	gfx->default_texture = resource_new(rm, hash_string("default texture"), RES_TEXTURE, 0);
-	texture_generate(gfx->default_texture, 1, 1, 1, 4, default_texture_data);
-	gfx->default_texture->loaded = 1;
-	
+	gfx->default_screen = resource_new(rm, hash_string("default screen"), RES_TEXTURE, 0);
 	gfx->default_shader = resource_new(rm, hash_string("default shader"), RES_SHADER, 0);
-	shader_compile(gfx->default_shader, default_shader_data);
-	gfx->default_shader->loaded = 1;
+
+	texture_generate(resource_get(rm, gfx->default_texture), 1, 1, 1, 4, default_texture_data);
+	shader_compile(resource_get(rm, gfx->default_shader), default_shader_data);
 
 	gfx->draw_calls = 0;
 
@@ -59,6 +59,79 @@ void graphics_init(graphics_t* gfx, const char* name) {
 	glEnable(GL_STENCIL_TEST);
 	glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
+	world_t* world = world_instance();
+	system_new(world, animation_update, 0, animation|sprite, disabled, postupdate, gfx);
+	system_new(world, draw_update, 0, transform|sprite, disabled, draw, gfx);
+	system_new(world, camera_update, transform|camera, transform|camera, disabled, addcomponent|setcomponent|delcomponent, gfx);
+}
+
+int draw_update(system_t* system, event_t evt) {
+	type_t* type; type_data* arch; chunk_data* chunk;
+	rid_t tex_id = NULL_RES, shd_id = NULL_RES;
+	texture_t* tex = NULL; shader_t* shd;
+	graphics_t* gfx = (graphics_t*)system->data;
+	double dt = evt.p0.nr;
+	mat3 transform; UID cam_id;  camera_t* cam;
+	hashmap_foreach(&gfx->cameramap, cam_id, cam) {
+		camera_bind(gfx, cam);
+		graphics_clear(gfx);
+		hashmap_foreach(&system->archetypes, type, arch) {
+			archetype_foreach(system->world, arch, chunk) {
+				ent_transform* t = chunk_get_componentarray(chunk, comp_transform);
+				ent_sprite* spr = chunk_get_componentarray(chunk, comp_sprite);
+				ent_tiles* tiles = chunk_get_componentarray(chunk, comp_tiles);
+				for (int i = 0; i < chunk->ent_count; i++) {
+					if (spr[i].texture.value != tex_id.value) {
+						tex_id = spr[i].texture;
+						tex = resource_get(resourcemanager_instance(), tex_id);
+					}
+					transform_set(transform,
+						t[i].position[0] - spr[i].offset[0], t[i].position[1] - spr[i].offset[1],
+						0.0f, tex->width, tex->height, 0.0f, 0.0f, 0.0f, 0.0f);
+					
+					if (tiles) {
+						graphics_draw_tiles(gfx, tex_id, transform,
+							tiles[i].data, TILE_ROWS, TILE_COLS,
+							spr[i].color, spr[i].alpha);
+					}
+					else {
+						graphics_draw_quad(gfx, tex_id, transform,
+							spr[i].index, spr[i].color, spr[i].alpha);
+					}
+				}
+			}
+		}
+	}
+	camera_bind(gfx, NULL);
+	tranform_ortho(gfx->display_state.projection, 0, gfx->display_state.width, gfx->display_state.height, 0);
+	return 0;
+}
+
+int animation_update(system_t* system, event_t evt) {
+	type_t* type; type_data* arch; chunk_data* chunk;
+	double dt = evt.p0.nr;
+	hashmap_foreach(&system->archetypes, type, arch) {
+		archetype_foreach(system->world, arch, chunk) {
+			ent_sprite* spr = chunk_get_componentarray(chunk, comp_sprite);
+			ent_animation* anim = chunk_get_componentarray(chunk, comp_animation);
+			for (int i = 0; i < chunk->ent_count; i++) {
+				anim[i].index += anim[i].speed * dt;
+
+				if (anim[i].speed > 0 && (
+					anim[i].index > anim[i].end_index ||
+					anim[i].index < anim[i].start_index))
+					anim[i].index = anim[i].start_index;
+				else if (anim[i].speed < 0 && (
+					anim[i].index < anim[i].start_index ||
+					anim[i].index >= anim[i].end_index))
+					anim[i].index = anim[i].end_index - 1;
+
+				spr[i].index = anim[i].index;
+			}
+		}
+	}
+	return 0;
 }
 
 void graphics_set_attributes(graphics_t* gfx, const StreamBuffer* pos_buffer, const StreamBuffer* mat_buffer) {
@@ -92,17 +165,21 @@ void graphics_set_attributes(graphics_t* gfx, const StreamBuffer* pos_buffer, co
 	glVertexAttribDivisor(5, 1);
 }
 
+
 void graphics_clear(graphics_t* gfx) {
 	glClearColor(0.f, 0.f, 0.f, 0.f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	graphics_stencil(gfx, 0x00);
 }
 
-void graphics_resize(graphics_t* gfx, int width, int height, int zoom) {
+void graphics_resize(graphics_t* gfx, int width, int height) {
 	gfx->display_state.width = width;
 	gfx->display_state.height = height;
 	glViewport(0, 0, width, height);
-	tranform_ortho(gfx->display_state.projection, 0, width / zoom, height / zoom, 0);
+	tranform_ortho(gfx->display_state.projection, 0, width, height, 0);
+	texture_t* texture = (texture_t*)resource_get(resourcemanager_instance(), gfx->default_screen);
+	texture_delete(texture);
+	texture_generate(texture, width, height, 1, 4, NULL);
 }
 
 void graphics_stencil(graphics_t* gfx, int stencil) {
@@ -113,10 +190,9 @@ VertexData graphics_requestdraw(graphics_t* gfx, const DrawCommand* cmd) {
 	StreamState* state = &gfx->draw_state;
 	int shouldflush = 0;
 	int totalquads = state->quad_count + cmd->quad_count;
-
 	if (totalquads > MAX_QUADS
-		|| cmd->texture != state->texture
-		|| cmd->shader != state->shader) {
+		|| cmd->texture.value != state->texture.value
+		|| cmd->shader.value != state->shader.value) {
 		graphics_flush(gfx);
 		state->texture = cmd->texture;
 		state->shader = cmd->shader;
@@ -147,14 +223,18 @@ void graphics_flush(graphics_t* gfx) {
 	size_t offsets[2];
 	size_t usedbytes[2] = {
 		state->quad_count * sizeof(pos_vertex_t),
-		state->quad_count * sizeof(col_vertex_t) };
+		state->quad_count * sizeof(col_vertex_t)};
 
+	resourcemanager_t* rm = resourcemanager_instance();
 	//TODO: check changed shader parameters
-	shader_use(state->shader);
-	glUniformMatrix3fv(glGetUniformLocation(state->shader->ID, "projection"), 1, GL_FALSE, &gfx->display_state.projection);
+	shader_t* shd = (shader_t*)resource_get(rm, state->shader);
+	texture_t* tex = (texture_t*)resource_get(rm, state->texture);
+
+	shader_use(shd);
+	glUniformMatrix3fv(glGetUniformLocation(shd->queue, "projection"), 1, GL_FALSE, &gfx->display_state.projection);
 	graphics_set_attributes(gfx, &gfx->draw_state.buffer[0], &gfx->draw_state.buffer[1]);
 	glActiveTexture(GL_TEXTURE0);
-	texture_bind(state->texture);
+	texture_bind(tex);
 
 	for (int i = 0; i < 2; i++) {
 		offsets[i] = streambuffer_unmap(&gfx->draw_state.buffer[i], usedbytes[i]);
@@ -172,51 +252,69 @@ void graphics_flush(graphics_t* gfx) {
 
 void graphics_present(graphics_t* gfx) {
 	graphics_flush(gfx);
+
+	mat3 transform;
+	transform_set(transform, 0.0f, 0.0f, 0.0f, gfx->display_state.width, gfx->display_state.height, 0.0f, 0.0f, 0.0f, 0.0f);
+	graphics_draw_quad(gfx, gfx->default_screen, transform, 0, 0xFFFFFF, 1.0f);
+	
+	graphics_flush(gfx);
 	for (int i = 0; i < 2; i++)
 		streambuffer_nextframe(&gfx->draw_state.buffer[i]);
-	window_swap(window_instance());
 	gfx->draw_calls = 0;
 }
 
-void graphics_draw_quad(graphics_t* gfx, texture_t* tex, mat3 transform, int index, unsigned int color, float alpha) {
-	DrawCommand cmd = {1, tex, gfx->default_shader };
+void graphics_draw_quad(graphics_t* gfx, rid_t texture, mat3 transform, int index, unsigned int color, float alpha) {
+	DrawCommand cmd = {1, texture, gfx->default_shader };
 	VertexData vertices = graphics_requestdraw(gfx, &cmd);
-	//transform_set(vertices.stream[0], 0, 0, 0, 1, 1, x, y, 0, 0);
 	memcpy(vertices.stream[0], transform, sizeof(mat3));
 	material_set(vertices.stream[1], index, color, alpha);
 }
 
-void graphics_draw_text(graphics_t* gfx, texture_t* tex, const char* text, float x, float y, int center, float alpha) {
-	DrawCommand cmd = { textcharcount(text), tex, gfx->default_shader };
+void graphics_draw_tiles(graphics_t* gfx, rid_t texture, mat3 transform, uint8_t* tiles, int rows, int cols, unsigned int color, float alpha) {
+	DrawCommand cmd = { rows * cols, texture, gfx->default_shader };
 	VertexData vertices = graphics_requestdraw(gfx, &cmd);
 	pos_vertex_t* pos = vertices.stream[0];
 	col_vertex_t* col = vertices.stream[1];
+	mat3 tile_transform;
+	int i = 0;
+	for (int y = 0; y < rows; y++) {
+		for (int x = 0; x < cols; x++, i++) {
+			transform_set(tile_transform, x, y, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+			transform_mul(&pos[i], transform, tile_transform);
+			material_set(&col[i], tiles[y * cols + x], color, alpha);
+		}
+	}	
+}
 
-	int width = tex->width;
-	int height = tex->height;
+void graphics_draw_text(graphics_t* gfx, rid_t texture, mat3 transform, const char* text, int center, float alpha) {
+	DrawCommand cmd = { textcharcount(text), texture, gfx->default_shader };
+	VertexData vertices = graphics_requestdraw(gfx, &cmd);
+	pos_vertex_t* pos = vertices.stream[0];
+	col_vertex_t* col = vertices.stream[1];
 	unsigned int color = WHITE;
-	int xoff = x - center * linelen(text) * width / 2;
-	int yoff = y;
-
+	float xoff = - (center * linelen(text) / 2.0f);
+	float yoff = 0.0f;
+	mat3 tile_transform;
 	int i = 0;
 	char* c = text;
 	while (*c) {
 		if (*c < 0x20) {
 			switch (*c) {
 			case '\n':
-				xoff = x - center * linelen(c + 1) * width / 2;
-				yoff += height;
+				xoff =  - center * linelen(c + 1) / 2;
+				yoff += 1;
 				break;
 			case '\t':
-				xoff += width * TAB_LEN;
+				xoff += TAB_LEN;
 				break;
 			}
 		}
 		else if (*c < 0x80) {
-			transform_set(&pos[i], xoff, yoff, 0.0f, width, height, 0.0f, 0.0f, 0.0f, 0.0f);
+			transform_set(tile_transform, xoff, yoff, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+			transform_mul(&pos[i], transform, tile_transform);
 			material_set(&col[i], *c - 32, color, alpha);
 			i++;
-			xoff += width;
+			xoff += 1;
 		}
 		else if (*c < COLOR_RANGE) {
 			color = color_table[*c & 0x0F];
@@ -225,19 +323,11 @@ void graphics_draw_text(graphics_t* gfx, texture_t* tex, const char* text, float
 	}
 }
 
-Canvas* graphics_newcanvas(graphics_t* gfx, int width, int height) {
-	Canvas* canvas = objectallocator_alloc(&gfx->canvases, sizeof(Canvas));
-	canvas_init(canvas, width, height);
-	return canvas;
-}
-
-//Graphics.resize(w, h, zoom)
+//Graphics.resize(w, h)
 int w_graphics_resize(lua_State* L) {
 	int width = luaL_checkinteger(L, 1);
 	int height = luaL_checkinteger(L, 2);
-	int zoom = luaL_checkinteger(L, 3);
-
-	graphics_resize(graphics_instance(), width, height, zoom);
+	graphics_resize(graphics_instance(), width, height);
 	return 0;
 }
 
@@ -258,34 +348,39 @@ int w_graphics_quad(lua_State* L) {
 
 //Graphics.texture("Texture", x, y [, c [, a[, i]]])
 int w_graphics_texture(lua_State* L) {
-	texture_t* texture = (texture_t*)resource_get(resourcemanager_instance(), *(rid_t*)lua_touserdata(L, 1));
-	if (!texture->loaded) LOAD_RESOURCE(L, 1);
+	resourcemanager_t* rm = resourcemanager_instance();
+
+	rid_t tex_id = *(rid_t*)luaL_checkudata(L, 1, res_mt[RES_TEXTURE]);
+	if (!resource_isloaded(rm, tex_id)) LOAD_RESOURCE(L, 1);
 	float x = luaL_optnumber(L, 2, 0.0f);
 	float y = luaL_optnumber(L, 3, 0.0f);
 	int i = luaL_optinteger(L, 4, 0);
 	int c = luaL_optinteger(L, 5, 0xFFFFFF);
 	float a = luaL_optinteger(L, 6, 1.0f);
+
 	mat3 transform;
-	transform_set(transform, x, y, 0.0f, texture->width, texture->height, 0.0f, 0.0f, 0.0f, 0.0f);
-	graphics_draw_quad(graphics_instance(), texture, transform, i, c, a);
+	texture_t* texture = (texture_t*)resource_get(rm, tex_id);
+	transform_set(transform, x, y, 0, texture->width, texture->height, 0, 0, 0, 0);
+	graphics_draw_quad(graphics_instance(), tex_id, transform, i, c, a);
 	return 0;
 }
 
 //Graphics.text("Texture", text, x, y [, center, alpha])
 int w_graphics_text(lua_State* L) {
-	graphics_t* gfx = graphics_instance();
-	int x, y, center;
-	float a;
-	texture_t* texture = (texture_t*)resource_get(resourcemanager_instance(), *(rid_t*)lua_touserdata(L, 1));
-	if (!texture) texture = gfx->default_texture;
-	else if (!texture->loaded) LOAD_RESOURCE(L, 1);
-	char* string = luaL_checkstring(L, 2);
-	x = luaL_checknumber(L, 3);
-	y = luaL_checknumber(L, 4);
-	center = (int)luaL_optinteger(L, 5, 0);
-	a = (float)luaL_optnumber(L, 6, 1.0);
+	resourcemanager_t* rm = resourcemanager_instance();
 
-	graphics_draw_text(gfx, texture, string, x, y, center, a);
+	rid_t font_id = *(rid_t*)luaL_checkudata(L, 1, res_mt[RES_TEXTURE]);
+	if (!resource_isloaded(rm, font_id)) LOAD_RESOURCE(L, 1);
+	char* string = luaL_checkstring(L, 2);
+	int x = luaL_checknumber(L, 3);
+	int y = luaL_checknumber(L, 4);
+	int center = (int)luaL_optinteger(L, 5, 0);
+	float a = (float)luaL_optnumber(L, 6, 1.0);
+
+	mat3 transform;
+	texture_t* font = (texture_t*)resource_get(rm, font_id);
+	transform_set(transform, x, y, 0, font->width, font->height, 0, 0, 0, 0);
+	graphics_draw_text(graphics_instance(), font_id, transform, string, center, a);
 	return 0;
 }
 

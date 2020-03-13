@@ -5,6 +5,7 @@
 //TODO: mutexes and conditionals
 void queue_init(queue_t* q, size_t element_size) {
 	bip_init(q, malloc(INITIAL_QUEUE_SIZE * element_size), INITIAL_QUEUE_SIZE * element_size);
+	//TODO: make it a simple circular buffer maybe
 	q->element_size = element_size;
 }
 

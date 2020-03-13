@@ -3,17 +3,17 @@
 
 static int dir_iter(lua_State *L);
 
-int filesystem_cb(filesystem_t* fs, Event evt) {
-	assert(fs->current_request == evt.data);
+int filesystem_cb(filesystem_t* fs, event_t evt) {
+	assert(fs->current_request == evt.p1.ptr);
 	fs->current_request = NULL;
 	filesystem_poll(fs);
 	return 0;
 }
 
 void filesystem_init(filesystem_t* filesystem, const char* name) {
-	objectallocator_init(filesystem, name, sizeof(file_t), 16, 4);
+	object_init(filesystem, name, sizeof(file_t), 16, 4);
 	hashmap_init(&filesystem->files);
-	objectallocator_init(&filesystem->requests, "FileRequest", sizeof(file_request), 16, 4);
+	object_init(&filesystem->requests, "FileRequest", sizeof(file_request), 16, 4);
 	queue_init(&filesystem->queue, sizeof(file_request*));
 	int size = MAX_PATH_LENGTH;
 	uv_exepath(filesystem->exepath, &size);
@@ -22,15 +22,14 @@ void filesystem_init(filesystem_t* filesystem, const char* name) {
 	printf("Save directory: %s", filesystem->workpath);
 	filesystem->current_request = NULL;
 
-	event_register(eventhandler_instance(), filesystem, EVT_FILEREAD, filesystem_cb);
-	event_register(eventhandler_instance(), filesystem, EVT_FILEWRITE, filesystem_cb);
+	event_register(eventhandler_instance(), filesystem, fileread | filewrite, filesystem_cb, NULL);
 }
 
 file_t* file_new(filesystem_t* filesystem, const char* path) {
 	assert(strlen(path) < MAX_PATH_LENGTH);
 	file_t* file = hashmap_get(&filesystem->files, hash_string(path));
 	if (!file) {
-		file = objectallocator_alloc(filesystem, sizeof(file_t));
+		file = object_alloc(filesystem, sizeof(file_t));
 		file->fd = 0;
 		file->open = 0;
 		strcpy(file->path, path);
@@ -67,7 +66,7 @@ int file_size(file_t* file) {
 	return (stat!=NULL) ? stat->st_size : -1;
 }
 
-int file_read(file_t* file, void* data, int length, int offset) {
+int file_read(file_t* file, char* data, int length, int offset) {
 	uv_fs_t req;
 	uv_buf_t buf = uv_buf_init(data, length);
 	int isopen = file->open;
@@ -78,7 +77,7 @@ int file_read(file_t* file, void* data, int length, int offset) {
 	return result;
 }
 //TODO: code duplication
-int file_write(file_t* file, void* data, int length, int offset) {
+int file_write(file_t* file, char* data, int length, int offset) {
 	uv_fs_t req;
 	uv_buf_t buf = uv_buf_init(data, length);
 	int isopen = file->open;
@@ -111,14 +110,14 @@ int file_close(file_t* file) {
 void file_delete(filesystem_t* filesystem, file_t* file) {
 	if (file->open) file_close(file);
 	hashmap_remove(&filesystem->files, hash_string(file->path));
-	objectallocator_free(filesystem, file);
+	object_free(filesystem, file);
 }
 
 
 //TODO: priority parameter and maximum amount of file reads and writes at a time
 file_request* request_new(file_t* file, req_type type, buffer_t* buffer, int length, int offset) {
 	filesystem_t* fs = filesystem_instance();
-	file_request* request = objectallocator_alloc(&fs->requests, sizeof(file_request));
+	file_request* request = object_alloc(&fs->requests, sizeof(file_request));
 	if (queue_put(&fs->queue, &request)) {
 		request->file = file;
 		request->type = type;
@@ -129,12 +128,12 @@ file_request* request_new(file_t* file, req_type type, buffer_t* buffer, int len
 		filesystem_poll(fs);
 		return request;
 	}
-	objectallocator_free(&fs->requests, request);
+	object_free(&fs->requests, request);
 	return NULL;
 }
 
 void request_release(file_request* request) {
-	objectallocator_free(filesystem_instance(), request);
+	object_free(filesystem_instance(), request);
 }
 
 static void on_read_cb(uv_fs_t* req) {
@@ -146,7 +145,10 @@ static void on_read_cb(uv_fs_t* req) {
 	else request->status = FILE_ERROR;
 	request->length = req->result;
 	uv_fs_req_cleanup(req);
-	event_dispatch(eventhandler_instance(), (Event) { .type = EVT_FILEREAD, .data = request });
+	event_dispatch(eventhandler_instance(), (event_t) { 
+		.type = on_fileread,
+		.p0.ptr = request->file,
+		.p1.ptr = request });
 }
 
 static void on_write_cb(uv_fs_t* req) {
@@ -158,7 +160,10 @@ static void on_write_cb(uv_fs_t* req) {
 	else request->status = FILE_ERROR;
 	request->length = req->result;
 	uv_fs_req_cleanup(req);
-	event_dispatch(eventhandler_instance(), (Event) { .type = EVT_FILEWRITE, .data = request });
+	event_dispatch(eventhandler_instance(), (event_t) { 
+		.type = on_filewrite,
+		.p0.ptr = request->file,
+		.p1.ptr = request });
 }
 
 void filesystem_poll(filesystem_t* fs) {

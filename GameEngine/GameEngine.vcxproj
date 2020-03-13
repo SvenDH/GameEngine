@@ -19,30 +19,32 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="async.h" />
-    <ClInclude Include="component.h" />
+    <ClInclude Include="app.h" />
+    <ClInclude Include="audio.h" />
     <ClInclude Include="data.h" />
     <ClInclude Include="ecs.h" />
     <ClInclude Include="event.h" />
     <ClInclude Include="file.h" />
     <ClInclude Include="graphics.h" />
     <ClInclude Include="math.h" />
-    <ClInclude Include="memory.h" />
+    <ClInclude Include="physics.h" />
     <ClInclude Include="platform.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stb_image.h" />
-    <ClInclude Include="stb_textedit.h" />
     <ClInclude Include="types.h" />
     <ClInclude Include="utils.h" />
-    <ClInclude Include="window.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="canvas.c" />
-    <ClCompile Include="glad.c" />
+    <ClCompile Include="audio.c" />
+    <ClCompile Include="body.c" />
+    <ClCompile Include="C:\Users\denha\C++\glad\src\glad.c" />
+    <ClCompile Include="camera.c" />
     <ClCompile Include="image.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="archetype.c" />
     <ClCompile Include="object.c" />
+    <ClCompile Include="collision.c" />
+    <ClCompile Include="physics.c" />
     <ClCompile Include="queue.c" />
     <ClCompile Include="chunks.c" />
     <ClCompile Include="component.c" />
@@ -57,10 +59,13 @@
     <ClCompile Include="resources.c" />
     <ClCompile Include="script.c" />
     <ClCompile Include="shader.c" />
+    <ClCompile Include="sound.c" />
+    <ClCompile Include="source.c" />
     <ClCompile Include="stream.c" />
     <ClCompile Include="systems.c" />
     <ClCompile Include="texture.c" />
     <ClCompile Include="app.c" />
+    <ClCompile Include="tilecell.c" />
     <ClCompile Include="timer.c" />
     <ClCompile Include="vector.c" />
     <ClCompile Include="window.c" />
@@ -77,37 +82,38 @@
     <None Include="..\resources\scripts\menuscene.lua" />
     <None Include="..\resources\scripts\optionscene.lua" />
     <None Include="..\resources\scripts\startscene.lua" />
+    <None Include="packages.config" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{201559F3-A3A3-4990-8A8A-AB1674E34CAC}</ProjectGuid>
     <RootNamespace>GameEngine</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -130,9 +136,9 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>C:\Users\denha\C++\glad\include;C:\Users\denha\C++\lua\include;C:\Users\denha\C++\libuv\include;C:\Users\denha\C++\cglm\include;C:\Users\denha\C++\glfw\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\denha\C++\glfw\lib;C:\Users\denha\C++\lua;C:\Users\denha\C++\libuv\Debug\lib;C:\Users\denha\C++\cglm\win\Debug;$(LibraryPath)</LibraryPath>
-    <SourcePath>C:\Users\denha\C++\glad\src;C:\Users\denha\C++\lua\include;C:\Users\denha\C++\libuv\src;C:\Users\denha\C++\cglm\src;$(SourcePath)</SourcePath>
+    <IncludePath>C:\Users\denha\C++\openal\include;C:\Users\denha\C++\glad\include;C:\Users\denha\C++\lua\include;C:\Users\denha\C++\libuv\include;C:\Users\denha\C++\glfw\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\denha\C++\openal\lib;C:\Users\denha\C++\glfw\lib;C:\Users\denha\C++\lua;C:\Users\denha\C++\libuv\Debug\lib;$(LibraryPath)</LibraryPath>
+    <SourcePath>C:\Users\denha\C++\openal\src;C:\Users\denha\C++\glad\src;C:\Users\denha\C++\lua\include;C:\Users\denha\C++\libuv\src;$(SourcePath)</SourcePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -143,9 +149,10 @@
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS; _CRT_NONSTDC_NO_DEPRECATE;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessToFile>false</PreprocessToFile>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>lua.lib;libuv.lib;glfw3.lib;iphlpapi.lib;userenv.lib;psapi.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>OpenAL32.lib;lua.lib;libuv.lib;glfw3.lib;iphlpapi.lib;userenv.lib;psapi.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Link>
       <IgnoreSpecificDefaultLibraries>LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
@@ -188,5 +195,15 @@
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\lua.redist.5.3.5.1\build\native\lua.redist.targets" Condition="Exists('..\packages\lua.redist.5.3.5.1\build\native\lua.redist.targets')" />
+    <Import Project="..\packages\lua.5.3.5.1\build\native\lua.targets" Condition="Exists('..\packages\lua.5.3.5.1\build\native\lua.targets')" />
+  </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\lua.redist.5.3.5.1\build\native\lua.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\lua.redist.5.3.5.1\build\native\lua.redist.targets'))" />
+    <Error Condition="!Exists('..\packages\lua.5.3.5.1\build\native\lua.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\lua.5.3.5.1\build\native\lua.targets'))" />
+  </Target>
 </Project>

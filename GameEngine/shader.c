@@ -26,15 +26,15 @@ int shader_compile(shader_t* shader, const char* source) {
 	glCompileShader(sFragment);
 
 	// Shader Program
-	shader->ID = glCreateProgram();
+	shader->queue = glCreateProgram();
 	if (shader_compile_error(sVertex))
-		glAttachShader(shader->ID, sVertex);
+		glAttachShader(shader->queue, sVertex);
 	else success++;
 	if (shader_compile_error(sFragment))
-		glAttachShader(shader->ID, sFragment);
+		glAttachShader(shader->queue, sFragment);
 	else success++;
-	glLinkProgram(shader->ID);
-	if (!program_compile_error(shader->ID))
+	glLinkProgram(shader->queue);
+	if (!program_compile_error(shader->queue))
 		success++;
 
 	glDeleteShader(sVertex);
@@ -44,16 +44,16 @@ int shader_compile(shader_t* shader, const char* source) {
 }
 
 int shader_use(shader_t* shader) {
-	int change = (shader->ID != current);
+	int change = (shader->queue != current);
 	if (change) {
-		glUseProgram(shader->ID);
-		current = shader->ID;
+		glUseProgram(shader->queue);
+		current = shader->queue;
 	}
 	return change;
 }
 
 void shader_delete(shader_t* shader) {
-	glDeleteProgram(shader->ID);
+	glDeleteProgram(shader->queue);
 }
 
 static int shader_compile_error(GLuint obj) {

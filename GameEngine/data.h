@@ -1,9 +1,87 @@
 #pragma once
 #include "types.h"
 #include "memory.h"
-
-//#include <uv.h>
+#include <stdint.h>
 #include <assert.h>
+
+
+#define GLOBAL_BUFFER_SIZE 134217728 //128MB
+
+#define ALLOCATOR_INIT(_buf, _data, _size)	do {(_buf)->data = _data; (_buf)->cap = _size; (_buf)->used = 0;} while (0)
+
+#define allocator_isempty(_buf) ((_buf)->used == 0)
+#define allocator_isfull(_buf)	((_buf)->cap == (_buf)->used)
+#define allocator_unused(_buf)  ((_buf)->cap - (_buf)->used)
+
+#define list_foreach(_list, _node) \
+	for ((_node) = (_list)->next; (_list) != (_node); (_node) = (_node)->next )
+
+#define hashmap_put(_m, _k, _v) _hashmap_put((_m), (key_t)(_k), (void*)(_v))
+#define hashmap_get(_m, _k) _hashmap_get((_m), (key_t)(_k))
+#define hashmap_isempty(_m) allocator_isempty(_m)
+#define hashmap_remove(_m, _k) _hashmap_remove((_m), (key_t)(_k))
+#define hashmap_foreach(_m, _key, _value) \
+	if (!hashmap_isempty(_m)) \
+		for (unsigned int _i = 0; _i < (_m)->cap / sizeof(hash_node); _i++) \
+			if (((hash_node*)(_m)->data)[_i].count > 0, \
+				(_key) = ((hash_node*)(_m)->data)[_i].key, \
+				(_value) = ((hash_node*)(_m)->data)[_i].data)
+
+#define circbuffer_full(_b, _size) (((_b)->head + 1) % (_size) == (_b)->tail)
+#define circbuffer_empty(_b, _size) ((_b)->head == (_b)->tail)
+#define circbuffer_push(_b, _val, _size) do {\
+	if circbuffer_full(_b, _size) break; \
+	int _next = (_b)->head + 1; \
+	if (_next >= (_size)) _next = 0; \
+	(_b)->buffer[(_b)->head] = _val; \
+	(_b)->head = _next; } while(0)
+#define circbuffer_pop(_b, _val, _size) do {\
+	if circbuffer_empty(_b, _size) break; \
+	int _next = (_b)->tail + 1; \
+	if (_next >= _size) _next = 0; \
+	_val = (_b)->buffer[(_b)->tail]; \
+	(_b)->tail = _next; } while(0)
+
+typedef struct listnode_t {
+	struct listnode_t* prev;
+	struct listnode_t* next;
+} listnode_t;
+
+typedef struct {
+	char* data;
+	size_t cap;
+	size_t used;
+} allocator_t;
+
+typedef struct {
+	allocator_t;
+	size_t element_size;
+	void** free_list;
+} pool_t;
+
+typedef struct {
+	allocator_t;
+	size_t read, write, end;
+} buffer_t;
+
+typedef struct {
+	allocator_t;
+} memorymanager_t;
+
+typedef struct {
+	allocator_t;
+	memorymanager_t* _global_mm;
+	const char* name;
+} memory_user_t;
+
+typedef struct {
+	memory_user_t;
+	size_t element_size;
+	size_t block_size;
+	size_t allign;
+	int block_index;
+	void** free_list;
+} object_allocator_t;
 
 typedef struct {
 	allocator_t;
@@ -25,14 +103,22 @@ typedef struct {
 	void* data;
 } hash_node;
 
-#define hashmap_put(_m, _k, _v) _hashmap_put((_m), (key_t)(_k), (void*)(_v))
-#define hashmap_get(_m, _k) _hashmap_get((_m), (key_t)(_k))
-#define hashmap_remove(_m, _k) _hashmap_remove((_m), (key_t)(_k))
-#define hashmap_foreach(_m, _key, _value) \
-	for (int _i = 0; _i < (_m)->cap / sizeof(hash_node); _i++) \
-		if (((hash_node*)(_m)->data)[_i].count > 0, \
-			(_key) = ((hash_node*)(_m)->data)[_i].key, \
-			(_value) = ((hash_node*)(_m)->data)[_i].data)
+inline void list_init(listnode_t* list) {
+	list->prev = list; 
+	list->next = list;
+}
+
+inline void list_add(struct listnode_t* list, struct listnode_t* node) {
+	node->prev = list->prev;
+	node->next = list;
+	list->prev->next = node;
+	list->prev = node;
+}
+
+inline void list_remove(listnode_t* list, listnode_t* node) {
+	node->next->prev = node->prev;
+	node->prev->next = node->next; 
+}
 
 void hashmap_init(hashmap_t* map);
 int _hashmap_put(hashmap_t* m, key_t key, void* value);
@@ -51,6 +137,38 @@ void vector_free(vector_t* vec);
 void queue_init(queue_t* q, size_t element_size);
 int queue_put(queue_t* q, void* data);
 int queue_get(queue_t* q, void* data);
+
+void bip_init(buffer_t* b, void* data, size_t size);
+void* bip_alloc(buffer_t* b, size_t size);
+void bip_free(buffer_t* b, void* ptr);
+void bip_clear(buffer_t* b);
+
+int bip_write(buffer_t* b, size_t size);
+void* bip_peek(buffer_t* b, size_t size);
+int bip_read(buffer_t* b, size_t size);
+
+memorymanager_t* memorymanager_instance();
+void* global_alloc(memorymanager_t* manager, size_t size, size_t allign, const char* name);
+void global_free(memorymanager_t* manager, void* mem);
+void global_clear(memorymanager_t* manager);
+
+inline void memoryuser_init(memory_user_t* mu, const char* name) {
+	mu->_global_mm = memorymanager_instance();
+	mu->name = name;
+}
+
+inline void* memoryuser_alloc(memory_user_t* mu, size_t size, size_t allign) {
+	return global_alloc(mu->_global_mm, size, allign, mu->name);
+}
+
+inline void memoryuser_free(memory_user_t* mu, void* mem) {
+	global_free(mu->_global_mm, mem);
+}
+
+void object_init(object_allocator_t* ob, const char* name, size_t element_size, size_t block_size, size_t allign);
+void* object_alloc(object_allocator_t* ob, size_t size);
+void object_free(object_allocator_t* ob, void* ptr);
+void object_clear(object_allocator_t* ob);
 
 /*
 #define HANDLE(_ui32) (Handle){.value = (_ui32)}

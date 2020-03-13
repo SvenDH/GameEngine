@@ -1,6 +1,7 @@
 #pragma once
 #include "memory.h"
 #include "resource.h"
+#include "ecs.h"
 #include <lua.h>
 #include <glad/glad.h>
 
@@ -10,10 +11,13 @@
 #define BUFFER_FRAMES 3
 
 typedef struct {
-	texture_t texture;
+	UID id;
+	rect2 viewport;
+	rid_t texture;
+	rid_t shader;
 	GLuint fbo;
 	GLuint rbo;
-} Canvas;
+} camera_t;
 
 typedef struct {
 	char* stream[2];
@@ -21,8 +25,8 @@ typedef struct {
 
 typedef struct {
 	int quad_count;
-	texture_t* texture;
-	shader_t* shader;
+	rid_t texture;
+	rid_t shader;
 } DrawCommand;
 
 typedef struct {
@@ -36,8 +40,8 @@ typedef struct {
 
 typedef struct {
 	int quad_count;
-	texture_t* texture;
-	shader_t* shader;
+	rid_t texture;
+	rid_t shader;
 	StreamBuffer buffer[2];
 	VertexData map;
 	GLuint vao;
@@ -55,12 +59,12 @@ typedef struct {
 } DisplayState;
 
 typedef struct {
-	ObjectAllocator textures;
-	ObjectAllocator shaders;
-	ObjectAllocator canvases;
+	object_allocator_t cameras;
+	hashmap_t cameramap;
 
-	texture_t* default_texture;
-	shader_t* default_shader;
+	rid_t default_texture;
+	rid_t default_shader;
+	rid_t default_screen;
 
 	DisplayState display_state;
 	StreamState draw_state;
@@ -69,19 +73,21 @@ typedef struct {
 	int draw_calls;
 } graphics_t;
 
+int camera_update(system_t* system, event_t evt);
+int draw_update(system_t* system, event_t evt);
+int animation_update(system_t* system, event_t evt);
+
 void graphics_init(graphics_t* gfx, const char* name);
 void graphics_set_attributes(graphics_t* gfx, const StreamBuffer* pos_buffer, const StreamBuffer* mat_buffer);
 void graphics_clear(graphics_t* gfx);
-void graphics_resize(graphics_t* gfx, int width, int height, int zoom);
+void graphics_resize(graphics_t* gfx, int width, int height);
 void graphics_flush(graphics_t* gfx);
 VertexData graphics_requestdraw(graphics_t* gfx, const DrawCommand* cmd);
 void graphics_present(graphics_t* gfx);
 void graphics_stencil(graphics_t* gfx, int stencil);
-void graphics_draw_quad(graphics_t* gfx, texture_t* texture, mat3 transform, int i, unsigned int color, float alpha);
-void graphics_draw_text(graphics_t* gfx, texture_t* texture, const char* text, float x, float y, int center, float a);
-Canvas* graphics_newcanvas(graphics_t* gfx, int width, int height);
-
-inline GLOBAL_SINGLETON(graphics_t, graphics, "Gfx");
+void graphics_draw_quad(graphics_t* gfx, rid_t texture, mat3 transform, int index, unsigned int color, float alpha);
+void graphics_draw_tiles(graphics_t* gfx, rid_t texture, mat3 transform, uint8_t* tiles, int rows, int cols, unsigned int color, float alpha);
+void graphics_draw_text(graphics_t* gfx, rid_t texture, mat3 transform, const char* text, int center, float alpha);
 
 void streambuffer_init(StreamBuffer* buffer, size_t size);
 void* streambuffer_map(StreamBuffer* buffer);
@@ -91,6 +97,7 @@ void streambuffer_nextframe(StreamBuffer* buffer);
 void texture_load(texture_t* texture, image_t* image, int width, int height);
 void texture_unload(texture_t* texture);
 void texture_generate(texture_t* texture, int tex_w, int tex_h, int tex_d, int channels, const char* data);
+void texture_delete(texture_t* texture);
 void texture_sheet(texture_t* texture, int sheet_w, int sheet_h, const char* data);
 void texture_subimage(texture_t* texture, int depth, const char* data);
 int texture_bind(texture_t* texture);
@@ -99,13 +106,17 @@ int shader_compile(shader_t* shader, const char* data);
 void shader_delete(shader_t* shader);
 int shader_use(shader_t* shader);
 
-void canvas_init(Canvas* canvas, int width, int height);
-int canvas_bind(Canvas* canvas);
+camera_t* camera_new(graphics_t* gfx, UID id);
+void camera_set(graphics_t* gfx, UID id, rid_t shader, rid_t texture, rect2 viewport);
+void camera_delete(graphics_t* gfx, UID id);
+int camera_bind(graphics_t* gfx, camera_t* cam);
 
 int w_graphics_resize(lua_State* L);
 int w_graphics_quad(lua_State* L);
 int w_graphics_texture(lua_State* L);
 int w_graphics_text(lua_State* L);
+
+inline GLOBAL_SINGLETON(graphics_t, graphics, "Gfx");
 
 int openlib_Graphics(lua_State* L);
 
@@ -166,9 +177,9 @@ enum color {
 static const unsigned int color_table[] = { BLACK, DARK_BLUE, DARK_GREEN, DARK_AQUA, DARK_RED, DARK_PURPLE, GOLD, GRAY, DARK_GRAY, BLUE, GREEN, AQUA, RED, LIGHT_PURPLE, YELLOW, WHITE };
 
 inline void material_set(col_vertex_t* mat, int idx, uint32_t color, float alpha) {
-	mat->col[0] = ((color >> 16) & 0xFF);	//r
-	mat->col[1] = ((color >> 8) & 0xFF);	//g
-	mat->col[2] = (color & 0xFF);			//b
-	mat->col[3] = (alpha * 0xFF);			//a
+	mat->col[0] = (char)((color >> 16) & 0xFF);	//r
+	mat->col[1] = (char)((color >> 8) & 0xFF);	//g
+	mat->col[2] = (char)(color & 0xFF);			//b
+	mat->col[3] = (char)(alpha * 0xFF);			//a
 	mat->idx = idx;			//texturearray index
 }

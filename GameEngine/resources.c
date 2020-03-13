@@ -4,8 +4,8 @@
 #define RESOURCE_SCRATCH_SIZE 16384 //16kb
 #define RESOURCE_BUFFER_SIZE 4194304 //4mb
 
-int resource_file_cb(resourcemanager_t* rm, Event evt) {
-	file_request* req = (file_request*)evt.data;
+int resource_file_cb(resourcemanager_t* rm, event_t evt) {
+	file_request* req = (file_request*)evt.p1.ptr;
 	resource_t* res = hashmap_get(&rm->requests, req);
 	if (res) {
 		if (req->status == FILE_DONE) { //TODO: handle file error
@@ -21,11 +21,11 @@ int resource_file_cb(resourcemanager_t* rm, Event evt) {
 }
 
 void resourcemanager_init(resourcemanager_t* manager, const char* name) {
-	objectallocator_init(manager, name, sizeof(res_union), 8, 8);
+	object_init(manager, name, sizeof(res_union), 8, 8);
 	hashmap_init(&manager->resources);
 	hashmap_init(&manager->requests);
 	bip_init(&manager->buffer, memoryuser_alloc(manager, RESOURCE_BUFFER_SIZE, PAGE_SIZE), RESOURCE_BUFFER_SIZE);
-	event_register(eventhandler_instance(), manager, EVT_FILEREAD, resource_file_cb);
+	event_register(eventhandler_instance(), manager, fileread, resource_file_cb, NULL);
 }
 
 void resource_load(resourcemanager_t* rm, resource_t* res, const char* path) {
@@ -48,18 +48,25 @@ void resource_loadasync(resourcemanager_t* rm, resource_t* res, const char* path
 	hashmap_put(&rm->requests, request, res);
 }
 
- resource_t* resource_new(resourcemanager_t* rm, uint32_t name, int type, intptr_t load) {
+ rid_t resource_new(resourcemanager_t* rm, uint32_t name, int type, intptr_t load) {
 	assert(type < RES_MAX);
 	rid_t uid = { .name = name,.type = type };
-	resource_t* res = objectallocator_alloc(rm, sizeof(res_union));
+	resource_t* res = object_alloc(rm, sizeof(res_union));
+	memset(res, 0, sizeof(res_union));
 	res->load = load;
 	res->loaded = 0;
 	hashmap_put(&rm->resources, uid.value, res);
-	return res;
+	return uid;
 }
 
+ int resource_isloaded(resourcemanager_t* rm, rid_t resource) {
+	 resource_t* res = hashmap_get(&rm->resources, resource.value);
+	 return res->loaded;
+ }
+
  resource_t* resource_get(resourcemanager_t* rm, rid_t uid) {
-	 return hashmap_get(&rm->resources, uid.value);
+	 if (uid.value == 0) return NULL;
+	 else return hashmap_get(&rm->resources, uid.value);
  }
 
 void resource_release(resourcemanager_t* rm, rid_t uid) {
@@ -67,7 +74,7 @@ void resource_release(resourcemanager_t* rm, rid_t uid) {
 	if (res) {
 		//rm->unloaders[res->uid.type](rm, res);
 		hashmap_remove(&rm->resources, uid.value);
-		objectallocator_free(rm, res);
+		object_free(rm, res);
 	}
 }
 
@@ -89,8 +96,9 @@ int w_resource_new(lua_State* L) {
 	resource_t* res = hashmap_get(&rm->resources, uid.value);
 	if (!res) {
 		lua_pushvalue(L, 2); //Refer input params
-		res = resource_new(rm, uid.name, uid.type, luaL_ref(L, LUA_REGISTRYINDEX));
+		uid = resource_new(rm, uid.name, uid.type, luaL_ref(L, LUA_REGISTRYINDEX));
 	}
+
 	rid_t* ref = lua_newuserdata(L, sizeof(rid_t));
 	luaL_setmetatable(L, res_mt[uid.type]);
 	*ref = uid;
@@ -172,6 +180,13 @@ int openlib_Resources(lua_State* L) {
 		{"load", w_resource_load},
 		{"__load", w_shader_load},
 		{"__unload", w_shader_unload},
+		{NULL, NULL}
+	};
+
+	static luaL_Reg sound_func[] = {
+		{"load", w_resource_load},
+		{"__load", w_sound_load},
+		{"__unload", w_sound_unload},
 		{NULL, NULL}
 	};
 

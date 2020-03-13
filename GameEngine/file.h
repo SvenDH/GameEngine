@@ -47,9 +47,9 @@ typedef struct {
 } file_request;
 
 typedef struct {
-	ObjectAllocator;
+	object_allocator_t;
 	hashmap_t files;
-	ObjectAllocator requests;
+	object_allocator_t requests;
 	file_request* current_request;
 	queue_t queue;
 	uv_fs_t req;
@@ -68,8 +68,8 @@ void filesystem_poll(filesystem_t* filesystem);
 file_t* file_new(filesystem_t* filesystem, const char* path);
 int file_open(file_t* file, const char* mode);
 int file_size(file_t* file);
-int file_read(file_t* file, void* data, int length, int offset);
-int file_write(file_t* file, void* data, int length, int offset);
+int file_read(file_t* file, char* data, int length, int offset);
+int file_write(file_t* file, char* data, int length, int offset);
 int file_flush(file_t* file);
 int file_close(file_t* file);
 void file_delete(filesystem_t* filesystem, file_t* file);

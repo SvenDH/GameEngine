@@ -16,11 +16,20 @@
     <Filter Include="Source Files\graphics">
       <UniqueIdentifier>{cc24972f-abff-4aa6-b26a-c08195a47cf8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\ecs">
+      <UniqueIdentifier>{f2664195-19bb-4fd9-8ef6-aa3237990a73}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\resources">
+      <UniqueIdentifier>{38e0ed47-3c83-4cf9-9843-caebcb641a58}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\physics">
+      <UniqueIdentifier>{bb750f83-4d59-418b-baca-d29efe7efc86}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\app">
+      <UniqueIdentifier>{8214f4eb-b0a8-44a3-a29f-81c5417d1e3e}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source Files\utilities">
       <UniqueIdentifier>{4c7a2b19-1b67-422a-968b-6f5983ad77ec}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\async">
-      <UniqueIdentifier>{8214f4eb-b0a8-44a3-a29f-81c5417d1e3e}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\utilities\memory">
       <UniqueIdentifier>{8052b9bc-59b9-4a2f-9937-c21a3a4fa6df}</UniqueIdentifier>
@@ -28,11 +37,8 @@
     <Filter Include="Source Files\utilities\datastruct">
       <UniqueIdentifier>{81698667-e7c4-4c44-8b72-86a1d5a61c15}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\ecs">
-      <UniqueIdentifier>{f2664195-19bb-4fd9-8ef6-aa3237990a73}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\resources">
-      <UniqueIdentifier>{38e0ed47-3c83-4cf9-9843-caebcb641a58}</UniqueIdentifier>
+    <Filter Include="Source Files\audio">
+      <UniqueIdentifier>{78e5dae6-6758-4c0e-9e98-ee401ff023d4}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -42,19 +48,10 @@
     <ClInclude Include="types.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="window.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="async.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="event.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="file.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="component.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ecs.h">
@@ -72,16 +69,19 @@
     <ClInclude Include="math.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="memory.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="stb_image.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="stb_textedit.h">
+    <ClInclude Include="physics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="app.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="audio.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -108,16 +108,16 @@
       <Filter>Source Files\ecs</Filter>
     </ClCompile>
     <ClCompile Include="event.c">
-      <Filter>Source Files\async</Filter>
+      <Filter>Source Files\app</Filter>
     </ClCompile>
     <ClCompile Include="window.c">
-      <Filter>Source Files\async</Filter>
+      <Filter>Source Files\app</Filter>
     </ClCompile>
     <ClCompile Include="main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="app.c">
-      <Filter>Source Files\async</Filter>
+      <Filter>Source Files\app</Filter>
     </ClCompile>
     <ClCompile Include="object.c">
       <Filter>Source Files\utilities\memory</Filter>
@@ -143,9 +143,6 @@
     <ClCompile Include="buffer.c">
       <Filter>Source Files\utilities\memory</Filter>
     </ClCompile>
-    <ClCompile Include="timer.c">
-      <Filter>Source Files\utilities</Filter>
-    </ClCompile>
     <ClCompile Include="ecs.c">
       <Filter>Source Files\ecs</Filter>
     </ClCompile>
@@ -158,16 +155,40 @@
     <ClCompile Include="stream.c">
       <Filter>Source Files\graphics</Filter>
     </ClCompile>
-    <ClCompile Include="canvas.c">
-      <Filter>Source Files\graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="glad.c">
-      <Filter>Source Files\graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="file.c">
+    <ClCompile Include="script.c">
       <Filter>Source Files\resources</Filter>
     </ClCompile>
-    <ClCompile Include="script.c">
+    <ClCompile Include="file.c">
+      <Filter>Source Files\app</Filter>
+    </ClCompile>
+    <ClCompile Include="physics.c">
+      <Filter>Source Files\physics</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\denha\C++\glad\src\glad.c">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="timer.c">
+      <Filter>Source Files\app</Filter>
+    </ClCompile>
+    <ClCompile Include="tilecell.c">
+      <Filter>Source Files\physics</Filter>
+    </ClCompile>
+    <ClCompile Include="body.c">
+      <Filter>Source Files\physics</Filter>
+    </ClCompile>
+    <ClCompile Include="collision.c">
+      <Filter>Source Files\physics</Filter>
+    </ClCompile>
+    <ClCompile Include="camera.c">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="audio.c">
+      <Filter>Source Files\audio</Filter>
+    </ClCompile>
+    <ClCompile Include="source.c">
+      <Filter>Source Files\audio</Filter>
+    </ClCompile>
+    <ClCompile Include="sound.c">
       <Filter>Source Files\resources</Filter>
     </ClCompile>
   </ItemGroup>
@@ -202,5 +223,6 @@
     <None Include="..\resources\scripts\gamescene.lua">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

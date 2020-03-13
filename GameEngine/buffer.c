@@ -1,4 +1,4 @@
-#include "memory.h"
+#include "data.h"
 
 void bip_init(buffer_t* buf, void* data, size_t size) {
 	ALLOCATOR_INIT(buf, data, size);
@@ -41,7 +41,7 @@ int bip_write(buffer_t* buf, size_t size) {
 					buf->write = write + size; //Atomic
 					return 1;
 				}
-				else if (size == (buf->cap)) {
+				else if (size == (buf->cap - write)) {
 					buf->write = 0; //Atomic
 					return 1;
 				}
@@ -114,7 +114,7 @@ int bip_read(buffer_t* buf, size_t size) {
 }
 
 void bip_free(buffer_t* buf, void* ptr) {
-	assert(0, "Not implemented");
+	assert(0 && "Not implemented");
 }
 
 void bip_clear(buffer_t* buf) {

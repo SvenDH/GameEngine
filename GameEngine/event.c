@@ -5,51 +5,41 @@
 
 #define EVENT_BUFFER_SIZE 4096
 
-EventHandler* eventhandler_instance() {
-	static EventHandler* eventhandler = NULL;
-	if (!eventhandler) {
-		eventhandler = (EventHandler*)malloc(sizeof(EventHandler));
-		eventhandler_init(eventhandler, "EventHandler");
-	}
-	return eventhandler;
-}
-
-void eventhandler_init(EventHandler* eventhandler, const char* name) {
-	objectallocator_init(eventhandler, name, sizeof(Delegate), 16, 4);
-	queue_init(&eventhandler->queue, sizeof(Event));
+void eventhandler_init(eventhandler_t* eventhandler, const char* name) {
+	assert(NUM_EVENTS < 32);
+	object_init((object_allocator_t*)eventhandler, name, sizeof(delegate_t), 16, 4);
+	queue_init(&eventhandler->queue, sizeof(event_t));
 	hashmap_init(&eventhandler->delegate_map);
 }
 
-Delegate* event_getdelegates(EventHandler* eventhandler, event_t evt) {
-	Delegate* first = hashmap_get(&eventhandler->delegate_map, evt);
-	return first;
-}
+void event_register(eventhandler_t* handler, void* receiver, int evt, evt_callback_t cb, lua_State* L) {
+	for (int i = 0; i < NUM_EVENTS; i++) {
+		if ((1 << i) & evt) {
+			delegate_t* l = object_alloc((object_allocator_t*)handler, sizeof(delegate_t));
+			delegate_t* list = event_getdelegates(handler, i);
 
-Delegate* event_register(EventHandler* handler, void* receiver, event_t evt, Callback cb) {
-	Delegate* l = objectallocator_alloc(handler, sizeof(Delegate));
-	Delegate* list = event_getdelegates(handler, evt);
+			l->next = list;
+			l->prev = NULL;
+			l->callback = cb;
+			l->receiver = receiver;
+			l->L = L;
 
-	l->next = list;
-	l->prev = NULL;
-	l->callback = cb;
-	l->receiver = receiver;
-	l->L = NULL;
-
-	if (list) list->prev = l;
-	hashmap_put(&handler->delegate_map, evt, (void*)l);
-
-	return l;
+			if (list) list->prev = l;
+			hashmap_put(&handler->delegate_map, i, (void*)l);
+		}
+	}
 }
 
 //Immediately call the listeners for event
-void event_dispatch(EventHandler* eventhandler, Event evt) {
-	for (Delegate* l = event_getdelegates(eventhandler, evt.type); l; l = l->next) {
+void event_dispatch(eventhandler_t* eventhandler, event_t evt) {
+	for (delegate_t* l = event_getdelegates(eventhandler, evt.type); l; l = l->next) {
 		if (l->L) {
 			lua_rawgeti(l->L, LUA_REGISTRYINDEX, l->lua_cb);
 			lua_rawgeti(l->L, LUA_REGISTRYINDEX, l->lua_ref);
 			lua_pushinteger(l->L, evt.type);
-			lua_pushinteger(l->L, evt.data);
-			lua_call(l->L, 3, 1);
+			lua_pushinteger(l->L, evt.p0.data);
+			lua_pushinteger(l->L, evt.p1.data);
+			lua_call(l->L, 4, 1);
 			if (lua_toboolean(l->L, -1)) break;
 		}
 		else if (l->callback(l->receiver, evt)) break;
@@ -57,67 +47,66 @@ void event_dispatch(EventHandler* eventhandler, Event evt) {
 }
 
 //Put event on queue
-int event_post(EventHandler* eventhandler, Event evt) {
+int event_post(eventhandler_t* eventhandler, event_t evt) {
 	return queue_put(&eventhandler->queue, &evt);
 }
 
 //Empty the event queue and dispatch events to all listeners
-void event_pump(EventHandler* handler) {
-	Event evt;
+void event_pump(eventhandler_t* handler) {
+	event_t evt;
 	queue_t* b = &handler->queue;
 	while (queue_get(b, &evt))
 		event_dispatch(handler, evt);
 }
 
-//Event.listen(obj, evt, func [, filter])
+//event_t.listen(obj, evt, func [, filter])
 static int w_event_listen(lua_State *L) {
 	lua_pushvalue(L, 1);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-	event_t evt = luaL_checkinteger(L, 2);
+	int evt = luaL_checkinteger(L, 2);
 	int cb = 0;
 	if (lua_isfunction(L, 3)) {
 		lua_pushvalue(L, 3);
 		cb = luaL_ref(L, LUA_REGISTRYINDEX);
 	}
-	Delegate* l = event_register(eventhandler_instance(), ref, evt, cb);
-	l->L = L;
+	event_register(eventhandler_instance(), ref, evt, cb, L);
 	return 0;
 }
 
-//Event(num, data)
+//event_t(num, data)
 static int w_event_new(lua_State *L) {
 	double nr;
-	Event* evt = lua_newuserdata(L, sizeof(Event));
+	event_t* evt = lua_newuserdata(L, sizeof(event_t));
 	luaL_setmetatable(L, Event_mt);
 	evt->type = luaL_checkinteger(L, 2);
 	switch (lua_type(L, 3)) {
 	case LUA_TNUMBER:
 		nr = lua_tonumber(L, 3);
-		if (nr == (int)nr) evt->data = nr;
-		else evt->nr = nr;
+		if (nr == (int)nr) evt->p0.data = nr;
+		else evt->p0.nr = nr;
 		break;
 	case LUA_TNIL:
 	case LUA_TNONE:
-		evt->data = 0;
+		evt->p0.data = 0;
 		break;
 	default:
 		lua_pushvalue(L, 3);
-		evt->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+		evt->p0.data = luaL_ref(L, LUA_REGISTRYINDEX);
 		break;
 	}
 	return 1;
 }
 
-//Event.dispatch(evt, [, data])
+//event_t.dispatch(evt, [, data])
 static int w_event_postnow(lua_State *L) {
-	Event* evt = luaL_checkudata(L, 1, Event_mt);
+	event_t* evt = luaL_checkudata(L, 1, Event_mt);
 	event_dispatch(eventhandler_instance(), *evt);
 	return 0;
 }
 
-//Event.post(evt [, data])
+//event_t.post(evt [, data])
 static int w_event_postlater(lua_State *L) {
-	Event* evt = luaL_checkudata(L, 1, Event_mt);
+	event_t* evt = luaL_checkudata(L, 1, Event_mt);
 	event_post(eventhandler_instance(), *evt);
 	return 0;
 }
@@ -131,13 +120,13 @@ int openlib_Event(lua_State* L) {
 	};
 	create_lua_class(L, Event_mt, w_event_new, event_func);
 
-	lua_newtable(L);
-#define X(name) \
-	lua_pushstring(L, #name); \
-	lua_pushnumber(L, EVT_##name); \
+	lua_getglobal(L, Event_mt);
+#define X(_name) \
+	lua_pushstring(L, "on_" #_name); \
+	lua_pushnumber(L, _name); \
 	lua_settable(L, -3);
 EVENT_TYPES
 #undef X
-	lua_setglobal(L, "EVENT");
+	lua_setglobal(L, "event");
 	return 0;
 }

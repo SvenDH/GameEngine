@@ -1,8 +1,8 @@
 #include "platform.h"
-#include "async.h"
+#include "app.h"
 #include "graphics.h"
+#include "physics.h"
 #include "event.h"
-#include "window.h"
 #include "file.h"
 #include "resource.h"
 #include "ecs.h"
@@ -32,7 +32,8 @@ static char* boot_source =
 
 "window.title(config.title)"
 "window.resize(config.width, config.height)"
-"graphics.resize(config.width, config.height, config.zoom)"
+"graphics.resize(config.width, config.height)"
+"physics.set_bitmaps(config.tileset)"
 
 "Menu = resources.script.menuscript:new()"
 
@@ -51,6 +52,7 @@ int main(int argc, const char* argv[]) {
 	openlib_Resources(L);
 	openlib_Window(L);
 	openlib_Graphics(L);
+	openlib_Physics(L);
 	openlib_ECS(L);
 	openlib_App(L);
 

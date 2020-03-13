@@ -8,20 +8,36 @@
 
 #define Vector_mt "vector"
 
+#define VEC2_ZERO (vec2){ 0.0f, 0.0f }
 #define MAT3_ZERO { { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } }
 #define MAT3_IDENTITY { { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
+#define NULL_RECT (rect2){0.0f, 0.0f, 0.0f, 0.0f}
+#define EPSILON 0.0001f
 
-/*
-//TODO: make this a macro
-inline void transform_mesh(mat3 t, pos_vertex_t* dest, pos_vertex_t* src, size_t size) {
-	for (int i = 0; i < size; i++) {
-		dest[i].pos[0] = (t[0][0] * src[i].pos[0]) + (t[1][0]* src[i].pos[1]) + t[2][0];
-		dest[i].pos[1] = (t[0][1] * src[i].pos[0]) + (t[1][1] * src[i].pos[1]) + t[2][1];
-		dest[i].tex[0] = src[i].tex[0];
-		dest[i].tex[1] = src[i].tex[1];
+inline float real_abs(float n) {
+	return (n > 0) ? n : -n;
+}
+
+inline float vec2_len(vec2 v) {
+	return sqrt(v[0] * v[0] + v[1] * v[1]);
+}
+
+inline void vec2_normalize(vec2 v) {
+	float len = vec2_len(v);
+	if (len > EPSILON) {
+		float invLen = 1.0f / len;
+		v[0] *= invLen;
+		v[1] *= invLen;
 	}
 }
-*/
+
+inline float vec2_dot(const vec2 a, const vec2 b) {
+	return a[0] * b[0] + a[1] * b[1];
+}
+
+inline float vec2_cross(const vec2 a, const vec2 b) {
+	return a[0] * b[1] + a[1] * b[0];
+}
 
 inline void transform_identity(mat3 t) {
 	memset(t, 0, sizeof(mat3));
@@ -68,6 +84,17 @@ inline void transform_set(mat3 t, float x, float y, float angle, float sx, float
 
 	t[0][2] = t[1][2] = 0.0f;
 	t[2][2] = 1.0f;
+}
+
+inline float residual(float p) {
+	return p - floor(p);
+}
+
+inline int overlap(rect2 a, rect2 b) {
+	return !((int)a[0] > (int)b[2]
+		|| (int)a[1] > (int)b[3]
+		|| (int)a[2] < (int)b[0]
+		|| (int)a[3] < (int)b[1]);
 }
 
 int openlib_Math(lua_State* L);

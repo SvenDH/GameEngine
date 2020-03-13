@@ -1,136 +1,110 @@
 #include "ecs.h"
 #include "graphics.h"
+#include "physics.h"
 
-int system_addtype(System* system, Event evt) {
-	type_t type = (type_t)evt.data;
-	if ((type & system->and_mask) == system->and_mask && !(type & system->not_mask)) {
-		Archetype* archetype = archetype_get(system->world, type, 0);
-		hashmap_put(&system->archetypes, archetype->type, archetype);
-	}
-	return 0;
-}
 
-int system_removetype(System* system, Event evt) {
-	type_t type = (type_t)evt.data;
-	if ((type & system->and_mask) == system->and_mask && !(type & system->not_mask)) {
-		Archetype* archetype = archetype_get(system->world, type, 0);
-		hashmap_remove(&system->archetypes, type);
-	}
-	return 0;
-}
-
-System* system_new(World* wld, Callback cb, type_t and_mask, type_t not_mask, event_t evt) {
-	System* system = objectallocator_alloc(&wld->systems, sizeof(System));
-	system->and_mask = and_mask;
-	system->not_mask = not_mask;
+system_t* system_new(world_t* wld, evt_callback_t cb, type_t react_mask, type_t and_mask, type_t not_mask, int evt, void* data) {
+	system_t* system = object_alloc(&wld->systems, sizeof(system_t));
+	list_add(&wld->system_list, system);
+	system->mask.react = react_mask;
+	system->mask.and = and_mask;
+	system->mask.not = not_mask;
 	system->world = wld;
+	system->cb = cb;
+	system->evt = evt;
+	system->data = data;
 	hashmap_init(&system->archetypes);
-	system->data = NULL;
-	//Subscribe the system to all events
-	EventHandler* handler = eventhandler_instance();
-	event_register(handler, system, evt, cb);
-	event_register(handler, system, EVT_NEWTYPE, system_addtype);
-	event_register(handler, system, EVT_DELTYPE, system_removetype);
+
 	return system;
 }
 
-void system_delete(World* wld, System* system) {
+void system_delete(world_t* wld, system_t* system) {
 	hashmap_free(&system->archetypes);
-	objectallocator_free(&wld->systems, system);
+	list_remove(&wld->system_list, system);
+	object_free(&wld->systems, system);
 }
 
-int draw_system(System* system, Event evt) {
-	double dt = (double)evt.nr;
-	hashmap_t* type_map = &system->archetypes;
-	type_t* type; Archetype* a;
-	rid_t tex_id = (rid_t){ .value = 0 };
-	texture_t* tex = NULL;
-	mat3 transform;
+int system_update(world_t* wld, event_t evt) {
+	system_t* system;
+	list_foreach(&wld->system_list, system)
+		if ((1 << evt.type) == system->evt)
+			system->cb(system, evt);
 
-	graphics_t* gfx = graphics_instance();
-	resourcemanager_t* rm = resourcemanager_instance();
-	hashmap_foreach(type_map, type, a) {
-		hashmap_t* chunk_map = &a->chunks;
-		entity_t* parent; Chunk* chunk;
-		hashmap_foreach(chunk_map, parent, chunk) {
-			ent_transform* t = chunk_get_componentarray(chunk, comp_transform);
-			ent_sprite* spr = chunk_get_componentarray(chunk, comp_sprite);
-			for (int i = 0; i < chunk->ent_count; i++) {
-				if (spr[i].texture.value != tex_id.value) {
-					tex = resource_get(rm, spr[i].texture);
-					tex_id = spr[i].texture;
-					if (!tex->loaded) {
-						//TODO: figure out how to load texture
-					}
-				}
-				transform_set(transform, t[i].position[0] - spr[i].offset[0], t[i].position[1] - spr[i].offset[1], 0.0f, tex->width, tex->height, 0.0f, 0.0f, 0.0f, 0.0f);
-				graphics_draw_quad(gfx,
-					tex,
-					transform,
-					spr[i].index,
-					spr[i].color,
-					spr[i].alpha);
+	return 0;
+}
+
+int system_listener(world_t* wld, event_t evt) {
+	type_t type = (type_t)evt.p0.data;
+	system_t* system;
+	type_t ent_type;
+	int i;
+	switch (evt.type) {
+	case on_addtype:
+		list_foreach(&wld->system_list, system)
+			if ((type & system->mask.and) == system->mask. and &&!(type & system->mask.not)) {
+				type_data* archetype = archetype_get(wld, type, 0);
+				if (archetype) hashmap_put(&system->archetypes, archetype->type, archetype);
 			}
-		}
+		break;
+	case on_deltype:
+		list_foreach(&wld->system_list, system)
+			if ((type & system->mask.and) == system->mask. and &&!(type & system->mask.not))
+				hashmap_remove(&system->archetypes, type);
+		break;
+	case on_addcomponent:
+	case on_setcomponent:
+	case on_delcomponent:
+		ent_type = entity_gettype(wld, (entity_t)evt.p1.data, NULL);
+		list_foreach(&wld->system_list, system)
+			if (((1 << evt.type) & system->evt)
+				&& ((1 << type) & system->mask.react)
+				&& (ent_type & system->mask.and) == system->mask. and
+				&&!(ent_type & system->mask.not)) {
+				system->cb(system, evt);
+			}
+		break;
 	}
 	return 0;
 }
 
-int move_system(System* system, Event evt) {
-	double dt = (double)evt.nr;
-	hashmap_t* type_map = &system->archetypes;
-	type_t* type; Archetype* a;
-	hashmap_foreach(type_map, type, a) {
-		hashmap_t* chunk_map = &a->chunks;
-		entity_t* parent; Chunk* chunk;
-		hashmap_foreach(chunk_map, parent, chunk) {
+int debug_system(system_t* system, event_t evt) {
+	type_t* type; type_data* arch; chunk_data* chunk;
+	physics_t* phs = physics_instance();
+	graphics_t* gfx = graphics_instance();
+	mat3 transform;
+	double dt = evt.p0.nr;
+	hashmap_foreach(&system->archetypes, type, arch) {
+		archetype_foreach(system->world, arch, chunk) {
+			entity_t* id = chunk_get_componentarray(chunk, comp_id);
 			ent_transform* t = chunk_get_componentarray(chunk, comp_transform);
 			ent_physics* phy = chunk_get_componentarray(chunk, comp_physics);
+			ent_collider* comp = chunk_get_componentarray(chunk, comp_collider);
 			for (int i = 0; i < chunk->ent_count; i++) {
-				t[i].position[0] += phy[i].speed[0] * dt;
-				t[i].position[1] += phy[i].speed[1] * dt;
-
-				phy[i].speed[0] += phy[i].acceletation[0] * dt;
-				phy[i].speed[1] += phy[i].acceletation[1] * dt;
+				body_t* body = body_get(phs, id[i]);
+				int c = RED;
+				body_t* o;
+				collision_t* p;
+				if (!hashmap_isempty(&body->pairs))
+					hashmap_foreach(&body->pairs, o, p)
+						if (p->colliding) {
+							c = GREEN;
+							break;
+						}
+				transform_set(
+					transform,
+					t[i].position[0] - comp[i].offset[0],
+					t[i].position[1] - comp[i].offset[1],
+					0.0f,
+					comp[i].size[0], comp[i].size[1],
+					0.0f, 0.0f, 0.0f, 0.0f);
+				graphics_draw_quad(gfx,
+					gfx->default_texture,
+					transform,
+					0,
+					c,
+					1.0);
 			}
 		}
 	}
 	return 0;
 }
-/*
-struct debug_info {
-	double fps;
-	Texture* font;
-};
-
-int debug_system(System* system, Event evt) {
-	struct debug_info* info;
-	char temp[16];
-	if (!system->data) {
-		info = malloc(sizeof(struct debug_info));
-		info->font = texture_get("lucida");
-		system->data = info;
-	}
-	info = system->data;
-	switch (evt.type) {
-	case EVT_NEWENTITY:
-		printf("Created entity: ");
-		print_uuid((UID)evt.data);
-		fflush(stdout);
-		break;
-	case EVT_DELENTITY:
-		printf("Deleted entity: ");
-		print_uuid((UID)evt.data);
-		fflush(stdout);
-		break;
-	case EVT_UPDATE:
-		break;
-	case EVT_GUI:
-		info->fps = 1.0 / (double)evt.data;
-		sprintf(temp, "%f", info->fps);
-		sprite_draw_text(info->font, temp, 600.0, 4.0, 0, 1.0);
-		break;
-	}
-	return 0;
-}
-*/

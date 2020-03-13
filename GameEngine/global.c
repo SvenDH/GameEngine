@@ -1,17 +1,17 @@
 #include "data.h"
 #include "utils.h"
 
-MemoryManager* memorymanager_instance() {
-	static MemoryManager* manager;
+memorymanager_t* memorymanager_instance() {
+	static memorymanager_t* manager;
 	if (!manager) {
-		manager = (MemoryManager*)malloc(sizeof(MemoryManager));
+		manager = (memorymanager_t*)malloc(sizeof(memorymanager_t));
 		ALLOCATOR_INIT(manager, aligned_alloc(PAGE_SIZE, GLOBAL_BUFFER_SIZE), GLOBAL_BUFFER_SIZE);
 		assert(manager->data);
 	}
 	return manager;
 }
 
-void* global_alloc(MemoryManager* manager, size_t size, size_t allign, const char* name) {
+void* global_alloc(memorymanager_t* manager, size_t size, size_t allign, const char* name) {
 	assert(size > 0 && "allocate called with size = 0.");
 	//TODO: register name
 	intptr_t ptr = &manager->data[manager->used];
@@ -25,12 +25,12 @@ void* global_alloc(MemoryManager* manager, size_t size, size_t allign, const cha
 	return (void*)ptr;
 }
 
-void global_free(MemoryManager* manager, void* mem) {
+void global_free(memorymanager_t* manager, void* mem) {
 	intptr_t ptr = (intptr_t)mem;
 	ptr -= sizeof(int);
 	manager->used -= ((intptr_t)&manager->data[manager->used]) - ((intptr_t)mem + *(int*)ptr);
 }
 
-void global_clear(MemoryManager* manager) {
+void global_clear(memorymanager_t* manager) {
 	manager->used = 0;
 }
