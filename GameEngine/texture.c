@@ -1,54 +1,69 @@
-#include "texture.h"
+#include "graphics.h"
+#include "math.h"
 #include "utils.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
-Texture* current_texture = NULL;
+static GLuint current = 0;
 
-void texture_generate(Texture* tex, int tex_w, int tex_h, int tex_d, int channels, unsigned char* data) {
-	if (tex_w > GL_MAX_TEXTURE_SIZE || tex_h > GL_MAX_TEXTURE_SIZE) {
-		printf("Sprite: Image too large: %ix%i, max size: %i", tex_w, tex_h, GL_MAX_TEXTURE_SIZE);
+void texture_load(texture_t* texture, image_t* image, int width, int height) {
+	int depth = (image->width / width) * (image->height / height);
+	texture_generate(texture, width, height, depth, 4, NULL);
+	texture_sheet(texture, image->width, image->height, image->data);
+}
+
+void texture_unload(texture_t* texture) {
+	glDeleteTextures(1, &texture->id);
+}
+
+void texture_generate(texture_t* texture, int width, int height, int depth, int channels, const char* data) {
+	if (width > GL_MAX_TEXTURE_SIZE || height > GL_MAX_TEXTURE_SIZE) {
+		printf("error: Image too large: %ix%i, max size: %i", width, height, GL_MAX_TEXTURE_SIZE);
 		return;
 	}
-	tex->width = tex_w;
-	tex->height = tex_h;
-	tex->depth = tex_d;
+	texture->width = width;
+	texture->height = height;
+	texture->depth = depth;
 	
 	switch (channels) {
-	case 1: tex->format = GL_RED; break;
-	case 2: tex->format = GL_RG; break;
-	case 3: tex->format = GL_RGB; break;
-	case 4: default: tex->format = GL_RGBA;  break;
+	case 1: texture->format = GL_RED; break;
+	case 2: texture->format = GL_RG; break;
+	case 3: texture->format = GL_RGB; break;
+	case 4: default: texture->format = GL_RGBA;  break;
 	}
 
-	if (tex->depth > GL_MAX_ARRAY_TEXTURE_LAYERS) {
-		printf("Sprite: Too many sub images: %i, max images: %i", tex->depth, GL_MAX_ARRAY_TEXTURE_LAYERS);
+	if (texture->depth > GL_MAX_ARRAY_TEXTURE_LAYERS) {
+		printf("error: Too many sub images: %i, max images: %i", texture->depth, GL_MAX_ARRAY_TEXTURE_LAYERS);
 		return;
 	}
-	glGenTextures(1, &tex->tex_ID);
-	glBindTexture(GL_TEXTURE_2D_ARRAY, tex->tex_ID);
+	glGenTextures(1, &texture->id);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, texture->id);
 	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	if (data) glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, tex->width, tex->height, tex->depth, 0, tex->format, GL_UNSIGNED_BYTE, data);
-	else glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, tex->width, tex->height, tex->depth, 0, tex->format, GL_UNSIGNED_BYTE, 0);
+	if (data) glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, texture->width, texture->height, texture->depth, 0, texture->format, GL_UNSIGNED_BYTE, data);
+	else glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, texture->width, texture->height, texture->depth, 0, texture->format, GL_UNSIGNED_BYTE, 0);
+
+	glBindTexture(GL_TEXTURE_2D_ARRAY, current);
 }
 
-void texture_sheet(Texture* tex, int sheet_w, int sheet_h, unsigned char* data) {
-	int columns = sheet_w / tex->width;
-	int rows = sheet_h / tex->height;
+void texture_delete(texture_t* texture) {
+	glDeleteTextures(1, &texture->id);
+}
 
-	glBindTexture(GL_TEXTURE_2D_ARRAY, tex->tex_ID);
+void texture_sheet(texture_t* texture, int sheet_w, int sheet_h, const char* data) {
+	int columns = sheet_w / texture->width;
+	int rows = sheet_h / texture->height;
+
+	glBindTexture(GL_TEXTURE_2D_ARRAY, texture->id);
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, sheet_w);
 	for (int x = 0; x < columns; x++) {
 		for (int y = 0; y < rows; y++) {
-			int xoff = x * tex->width;
-			int yoff = y * tex->height;
+			int xoff = x * texture->width;
+			int yoff = y * texture->height;
 			int depth = y * columns + x;
 			glPixelStorei(GL_UNPACK_SKIP_PIXELS, xoff);
 			glPixelStorei(GL_UNPACK_SKIP_ROWS, yoff);
-			glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, depth, tex->width, tex->height, 1, tex->format, GL_UNSIGNED_BYTE, data);
+			glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, depth, texture->width, texture->height, 1, texture->format, GL_UNSIGNED_BYTE, data);
 		}
 	}
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
@@ -56,87 +71,73 @@ void texture_sheet(Texture* tex, int sheet_w, int sheet_h, unsigned char* data) 
 	glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
 }
 
-void texture_subimage(Texture* sprite, int index, unsigned char* data) {
-	glBindTexture(GL_TEXTURE_2D_ARRAY, sprite->tex_ID);
-	glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, index, sprite->width, sprite->height, 1, sprite->format, GL_UNSIGNED_BYTE, data);
+void texture_subimage(texture_t* texture, int index, const char* data) {
+	glBindTexture(GL_TEXTURE_2D_ARRAY, texture->id);
+	glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, index, texture->width, texture->height, 1, texture->format, GL_UNSIGNED_BYTE, data);
 }
 
-void texture_delete(Texture* sprite) {
-	glDeleteTextures(1, &sprite->tex_ID);
-}
-
-void texture_bind(Texture* tex) {
-	if (tex != current_texture) {
-		if (tex) glBindTexture(GL_TEXTURE_2D_ARRAY, tex->tex_ID);
-		else glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-		current_texture = tex;
+int texture_bind(texture_t* tex) {
+	GLuint id = 0;
+	if (tex) id = tex->id;
+	int changed = (id != current);
+	if (changed) {
+		glBindTexture(GL_TEXTURE_2D_ARRAY, id);
+		current = id;
 	}
+	return changed;
 }
 
-Texture* texture_getcurrent() {
-	return current_texture;
+//Texture{image, width, height}
+int w_texture_new(lua_State* L) {
+	lua_pushinteger(L, RES_TEXTURE);
+	return w_resource_new(L);
 }
 
-static int texture_load(lua_State *L) {
-	int spr_w, spr_h, w, h, c, data_len;
-	unsigned char* image;
-	Texture* tex;
-
-	const char* data = luaL_checklstring(L, 1, &data_len);
-	spr_w = luaL_checkinteger(L, 2);
-	spr_h = luaL_checkinteger(L, 3);
-	if (spr_w < 0 || spr_h < 0) return luaL_error(L, "Error dimensions incorrect");
-
-	image = stbi_load_from_memory(data, data_len, &w, &h, &c, 4);
-	if (image) {
-		tex = (Texture*)lua_newuserdata(L, sizeof(Texture));
-		luaL_setmetatable(L, Texture_mt);
-		texture_generate(tex, spr_w, spr_h, (w / spr_w) * (h / spr_h), 4, NULL);
-		texture_sheet(tex, w, h, image);
-		free(image);
-		return 1;
+//Texture:__load{image, width, heigth}
+int w_texture_load(lua_State* L) {
+	texture_t* texture = (texture_t*)resource_get(*(rid_t*)lua_touserdata(L, 1));
+	if (lua_type(L, 2) == LUA_TTABLE) {
+		lua_getfield(L, 2, "image"); //TODO: could also be a path to image maybe
+		lua_getfield(L, 2, "width");
+		lua_getfield(L, 2, "height");
+		lua_remove(L, 2);
 	}
-	else return luaL_error(L, "Error loading sprite image data");
+	image_t* image = (image_t*)resource_get(*(rid_t*)lua_touserdata(L, 2));
+	int w = luaL_optinteger(L, 3, image->width);
+	int h = luaL_optinteger(L, 4, image->height);
+	if (!image->loaded) LOAD_RESOURCE(L, 2);
+	texture_load(texture, image, w, h);
+	return 0;
 }
 
-static int lua_Texture_index(lua_State* L) {
-	Texture *s = luaL_checkudata(L, 1, Texture_mt);
-	int t = lua_type(L, 2);
-	if (t == LUA_TSTRING) {
-		const char *key = lua_tostring(L, 2);		
-		if (!strcmp(key, "width") || !strcmp(key, "w")) lua_pushinteger(L, s->width);
-		else if (!strcmp(key, "height") || !strcmp(key, "h")) lua_pushinteger(L, s->height);
-		else if (!strcmp(key, "depth") || !strcmp(key, "d")) lua_pushinteger(L, s->depth);
+//Texture:__unload()
+int w_texture_unload(lua_State* L) {
+	texture_t* texture = (texture_t*)resource_get(*(rid_t*)lua_touserdata(L, 1));
+	texture_unload(texture);
+	return 0;
+}
+
+//Texture.width / Texture.height
+int w_texture_index(lua_State* L) {
+	texture_t* texture = (texture_t*)resource_get(*(rid_t*)lua_touserdata(L, 1));
+	if (lua_type(L, 2) == LUA_TSTRING) {
+		size_t len;
+		const char *key = lua_tolstring(L, 2, &len);
+#define KEY "width"
+		if (len == sizeof(KEY) - 1 && !memcmp(key, KEY, sizeof(KEY) - 1)) {
+			lua_pushinteger(L, texture->width);
+		}
+#define KEY "height"
+		else if (len == sizeof(KEY) - 1 && !memcmp(key, KEY, sizeof(KEY) - 1)) {
+			lua_pushinteger(L, texture->height);
+		}
+#undef KEY
+		else luaL_getmetafield(L, 1, key);
 	}
 	else lua_pushnil(L);
 	return 1;
 }
 
-static int lua_Texture_bind(lua_State* L) {
-	Texture *s = luaL_checkudata(L, 1, Texture_mt);
-	texture_bind(s);
-	return 0;
-}
-
-static luaL_Reg func[] = {
-		{"__index", lua_Texture_index},
-		{"bind", lua_Texture_bind},
-		{NULL, NULL}
-};
-
-static luaL_Reg lib[] = {
-		{"load", texture_load},
-		{NULL, NULL}
-};
-
-int openlib_Texture(lua_State* L) {
-	luaL_newmetatable(L, Texture_mt);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");
-	luaL_setfuncs(L, func, 0);
-	lua_pop(L, 1);
-
-	luaL_newlib(L, lib);
-	lua_setglobal(L, Texture_mt);
-	return 1;
+int w_texture_draw(lua_State* L) {
+	return w_graphics_texture(L);
 }

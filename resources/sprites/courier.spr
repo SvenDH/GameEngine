@@ -1,0 +1,7 @@
+return {
+	image = Image(image_dir .. 'courier.png')
+	width = 8
+	height = 16
+	depth = 96
+	mesh = Mesh(0, 0, 8, 16)
+}

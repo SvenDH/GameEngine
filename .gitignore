@@ -1,9 +1,0 @@
-
-.vs/
-packages/
-
-resources/
-*.obj
-*.enc
-*.log
-*.tlog

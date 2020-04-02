@@ -1,0 +1,49 @@
+﻿  hashgrid.c
+D:\Projects\GameEngine\GameEngine\utils.h(419,34): warning C4047: '=': 'char *' differs in levels of indirection from 'char'
+D:\Projects\GameEngine\GameEngine\utils.h(432,45): warning C4090: 'function': different 'const' qualifiers
+D:\Projects\GameEngine\GameEngine\utils.h(433,42): warning C4090: 'function': different 'const' qualifiers
+D:\Projects\GameEngine\GameEngine\utils.h(434,44): warning C4090: 'function': different 'const' qualifiers
+D:\Projects\GameEngine\GameEngine\utils.h(435,47): warning C4090: 'function': different 'const' qualifiers
+D:\Projects\GameEngine\GameEngine\utils.h(440,37): warning C4090: 'function': different 'const' qualifiers
+D:\Projects\GameEngine\GameEngine\utils.h(445,52): warning C4133: 'function': incompatible types - from 'uint *' to 'byte *'
+D:\Projects\GameEngine\GameEngine\utils.h(445,79): warning C4133: 'function': incompatible types - from 'uint *' to 'byte *'
+D:\Projects\GameEngine\GameEngine\utils.h(445,92): warning C4133: 'function': incompatible types - from 'int *' to 'ushort *'
+D:\Projects\GameEngine\GameEngine\math.h(28,40): warning C4244: 'return': conversion from 'double' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\math.h(96,21): warning C4244: 'return': conversion from 'double' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\math.h(159,2): warning C4244: '=': conversion from 'const int' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\math.h(160,2): warning C4244: '=': conversion from 'const int' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\math.h(159,1): warning C4244: 'initializing': conversion from 'float' to 'const int', possible loss of data
+D:\Projects\GameEngine\GameEngine\math.h(160,1): warning C4244: 'initializing': conversion from 'float' to 'const int', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(60,27): warning C4022: 'function through pointer': pointer mismatch for actual parameter 1
+D:\Projects\GameEngine\GameEngine\hashgrid.c(72,2): warning C4047: '=': 'element_t *' differs in levels of indirection from 'key_t'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(76,50): warning C4047: '=': 'UID' differs in levels of indirection from 'void *'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(78,27): warning C4022: 'function through pointer': pointer mismatch for actual parameter 1
+D:\Projects\GameEngine\GameEngine\hashgrid.c(101,5): warning C4047: '=': 'element_t *' differs in levels of indirection from 'key_t'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(101,5): warning C4047: '=': 'int' differs in levels of indirection from 'void *'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(86,1): warning C4244: 'initializing': conversion from 'int' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(88,1): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(89,1): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(98,1): warning C4047: 'initializing': 'int' differs in levels of indirection from 'void *'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(130,6): warning C4047: '=': 'element_t *' differs in levels of indirection from 'key_t'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(130,6): warning C4047: '=': 'int' differs in levels of indirection from 'void *'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(113,1): warning C4244: 'initializing': conversion from 'int' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(115,1): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(116,1): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(120,1): warning C4047: 'initializing': 'int' differs in levels of indirection from 'void *'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(201,24): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(202,24): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(227,22): warning C4244: 'function': conversion from 'float' to 'short', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(230,4): warning C4047: '=': 'element_t *' differs in levels of indirection from 'key_t'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(230,4): warning C4047: '=': 'int' differs in levels of indirection from 'void *'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(192,1): warning C4244: 'initializing': conversion from 'int' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(195,1): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(196,1): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(197,1): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(198,1): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(260,5): warning C4047: '=': 'element_t *' differs in levels of indirection from 'key_t'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(260,5): warning C4047: '=': 'int' differs in levels of indirection from 'void *'
+D:\Projects\GameEngine\GameEngine\hashgrid.c(252,1): warning C4244: 'initializing': conversion from 'int' to 'float', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(255,1): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+D:\Projects\GameEngine\GameEngine\hashgrid.c(256,1): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+LINK : warning LNK4098: defaultlib 'MSVCRT' conflicts with use of other libs; use /NODEFAULTLIB:library
+  GameEngine.vcxproj -> D:\Projects\GameEngine\Debug\GameEngine.exe

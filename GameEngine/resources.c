@@ -1,0 +1,212 @@
+#include "resource.h"
+#include "utils.h"
+
+#define RESOURCE_SCRATCH_SIZE 16384 //16kb
+#define RESOURCE_BUFFER_SIZE 4194304 //4mb
+
+int resource_file_cb(resourcemanager_t* rm, event_t evt) {
+	file_request* req = (file_request*)evt.p1.ptr;
+	resource_t* res = hashmap_get(&rm->requests, req);
+	if (res) {
+		if (req->status == FILE_DONE) { //TODO: handle file error
+			size_t length = req->length;
+			char* data = bip_peek(&rm->buffer, length);
+			//rm->loaders[res->uid.type](rm, res, data, length);
+			bip_read(&rm->buffer, length);
+		}
+		hashmap_remove(&rm->requests, req);
+		request_release(req);
+	}
+	return 0;
+}
+
+void resourcemanager_init(resourcemanager_t* manager, const char* name) {
+	object_init(manager, name, sizeof(res_union), 8, 8);
+	hashmap_init(&manager->resources);
+	hashmap_init(&manager->requests);
+	bip_init(&manager->buffer, memoryuser_alloc(manager, RESOURCE_BUFFER_SIZE, PAGE_SIZE), RESOURCE_BUFFER_SIZE);
+	event_register(manager, fileread, resource_file_cb, NULL);
+}
+
+resource_t* resourcemanager_lookup(resourcemanager_t* rm, rid_t uid) {
+	if (uid.value == 0) return NULL;
+	else return hashmap_get(&rm->resources, uid.value);
+}
+
+void resource_load(resource_t* res, const char* path) {
+	char data[RESOURCE_BUFFER_SIZE];
+	file_t* file = file_new(filesystem_instance(), path);
+	size_t len = file_size(file);
+	assert(len < RESOURCE_BUFFER_SIZE);
+	file_read(file, data, len, 0);
+	data[len] = '\0';
+	//rm->loaders[res->uid.type](rm, res, data, len);
+}
+
+void resource_loadasync(resource_t* res, const char* path) {
+	resourcemanager_t* rm = resourcemanager_instance();
+	file_t* file = file_new(filesystem_instance(), path);
+	file_request* request = async_file_read(
+		file,
+		&rm->buffer,
+		file_size(file),
+		0);
+	hashmap_put(&rm->requests, request, res);
+}
+
+ rid_t resource_new(uint32_t name, int type, intptr_t load) {
+	 resourcemanager_t* rm = resourcemanager_instance();
+	assert(type < RES_MAX);
+	rid_t uid = { .name = name,.type = type };
+	resource_t* res = object_alloc(rm, sizeof(res_union));
+	memset(res, 0, sizeof(res_union));
+	res->load = load;
+	res->loaded = 0;
+	hashmap_put(&rm->resources, uid.value, res);
+	return uid;
+}
+
+ bool resource_isloaded(rid_t uid) {
+	 resource_t* res = resourcemanager_lookup(resourcemanager_instance(), uid);
+	 return res->loaded;
+ }
+
+ resource_t* resource_get(rid_t uid) {
+	 return resourcemanager_lookup(resourcemanager_instance(), uid);
+ }
+
+void resource_release(rid_t uid) {
+	resourcemanager_t* rm = resourcemanager_instance();
+	resource_t* res = resourcemanager_lookup(rm, uid);
+	if (res) {
+		//rm->unloaders[res->uid.type](rm, res);
+		hashmap_remove(&rm->resources, uid.value);
+		object_free(rm, res);
+	}
+}
+
+//Resource(name, type)
+int w_resource_new(lua_State* L) {
+	resourcemanager_t* rm = resourcemanager_instance();
+	rid_t uid;
+	char* path = NULL;
+	uid.type = luaL_checkinteger(L, 3);
+	switch (lua_type(L, 2)) {
+	case LUA_TSTRING:
+		path = luaL_checkstring(L, 2);
+		uid.name = hash_string(path);
+		break;
+	case LUA_TTABLE:
+		uid.name = hash_luatable(L, 2);
+		break;
+	}
+	//log_info("0x%llx", uid.value);
+	resource_t* res = hashmap_get(&rm->resources, uid.value);
+	if (!res) {
+		lua_pushvalue(L, 2); //Refer input params
+		uid = resource_new(uid.name, uid.type, luaL_ref(L, LUA_REGISTRYINDEX));
+	}
+
+	rid_t* ref = lua_newuserdata(L, sizeof(rid_t));
+	luaL_setmetatable(L, res_mt[uid.type]);
+	*ref = uid;
+	return 1;
+}
+
+//Resource:load()
+int w_resource_load(lua_State* L) { //TODO: supply other path/table
+	resource_t* res = resource_get(*(rid_t*)lua_touserdata(L, 1));
+	if (res && !res->loaded) {
+		res->loaded = 1;
+		luaL_getmetafield(L, 1, "__load");
+		lua_pushvalue(L, 1);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, res->load);
+		//If string we assume path, else table
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			char* path = lua_tostring(L, -1);
+			luaL_Buffer buff;
+			file_t* file = file_new(filesystem_instance(), path);
+			size_t len = file_size(file);
+			char* data = luaL_buffinitsize(L, &buff, len);
+			int result = file_read(file, data, len, 0);
+			if (result >= 0) luaL_pushresultsize(&buff, result);
+			else luaL_error(L, "Could not read file");
+			lua_remove(L, -2); //Remove path
+		}
+		lua_call(L, 2, 0);
+	}
+	return 1;
+}
+
+//Resource:unload()
+int w_resource_unload(lua_State* L) {
+	resource_t* res = resource_get(*(rid_t*)lua_touserdata(L, 1));
+	if (res && res->loaded) {
+		res->loaded = 0;
+		luaL_getmetafield(L, 1, "__unload");
+		lua_pushvalue(L, 1);
+		lua_call(L, 1, 0);
+	}
+	return 1;
+}
+
+//Resource.__tostring()
+int w_resource_tostring(lua_State* L) {
+	rid_t* name = (rid_t*)lua_touserdata(L, 1);
+	char buff[16];
+	sprintf(buff, "0x%llx", *name);
+	lua_pushlstring(L, buff, 16);
+	return 1;
+}
+
+int openlib_Resources(lua_State* L) {
+	static luaL_Reg image_func[] = {
+		{"load", w_resource_load},
+		{"__load", w_image_load},
+		{"__unload", w_image_unload},
+		{NULL, NULL}
+	};
+
+	static luaL_Reg script_func[] = {
+		{"load", w_resource_load},
+		{"__load", w_script_load},
+		{"__unload", w_script_unload},
+		{"new", w_script_run},
+		{NULL, NULL}
+	};
+
+	static luaL_Reg texture_func[] = {
+		{"load", w_resource_load},
+		{"__load", w_texture_load},
+		{"__unload", w_texture_unload},
+		{"__index", w_texture_index},
+		{"draw", w_texture_draw},
+		{NULL, NULL}
+	};
+
+	static luaL_Reg shader_func[] = {
+		{"load", w_resource_load},
+		{"__load", w_shader_load},
+		{"__unload", w_shader_unload},
+		{NULL, NULL}
+	};
+
+	static luaL_Reg sound_func[] = {
+		{"load", w_resource_load},
+		{"__load", w_sound_load},
+		{"__unload", w_sound_unload},
+		{NULL, NULL}
+	};
+
+#define X(num, name) create_lua_class(L, #name, w_##name##_new, name##_func);
+	RESOURCE_DATA
+#undef X
+
+	static luaL_Reg resource_func[] = {
+		{"__tostring", w_resource_tostring},
+		{"load", w_resource_load},
+		{"unload", w_resource_unload},
+		{NULL, NULL}
+	};
+	create_lua_class(L, Resource_mt, w_resource_new, resource_func);
+}

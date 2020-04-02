@@ -1,0 +1,4 @@
+// Hint files help the Visual Studio IDE interpret Visual C++ identifiers
+// such as names of functions and macros.
+// For more information see https://go.microsoft.com/fwlink/?linkid=865984
+#define archetype_foreach(_wld, _arch, _chunk) for (_chunk = (_arch)->chunk_list; _chunk; _chunk = chunk_get((_wld), _chunk)->next_chunk)
